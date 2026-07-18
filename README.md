@@ -8,6 +8,10 @@ It runs entirely on your own machine. The only outbound calls are to the event
 sources it scrapes and to OpenStreetMap for turning place names into
 coordinates. Your searches and your tag choices stay in local files.
 
+> **📱 Android app:** there's a native Kotlin/Jetpack Compose version in
+> [`android/`](android/) with the same features (device GPS, scraping, tagging,
+> filtering). See [android/README.md](android/README.md) to build it.
+
 ## What it does
 
 - **Web scraping** — pulls events from configurable sources. Instead of
