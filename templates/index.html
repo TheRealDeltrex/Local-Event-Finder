@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Local Events Finder</title>
+<meta name="description" content="Find things to do near you — scraped local events within range, tagged as date ideas or family friendly." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%8D%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1>📍 Local Events Finder</h1>
+      <p>Find things to do near you. Pick a spot, set a range, and mark events as date ideas or family friendly.</p>
+    </header>
+
+    <section class="panel controls">
+      <div class="loc-row">
+        <button id="btn-geo" class="btn ghost" type="button" title="Use this device's location">
+          📡 Use my location
+        </button>
+        <span class="or">or</span>
+        <input id="loc-name" type="text" placeholder="Type a town or city (e.g. Cologne)" autocomplete="off" />
+        <button id="btn-search" class="btn" type="button">Search</button>
+      </div>
+
+      <div class="range-row">
+        <label for="range">Range: <strong id="range-val">40</strong> km</label>
+        <input id="range" type="range" min="1" max="40" value="40" step="1" />
+      </div>
+
+      <div class="filter-row">
+        <span class="filter-label">Show:</span>
+        {% for tag in all_tags %}
+        <label class="chip-toggle">
+          <input type="checkbox" class="tag-filter" value="{{ tag }}" checked />
+          <span>{{ tag_labels[tag] }}</span>
+        </label>
+        {% endfor %}
+        <label class="chip-toggle">
+          <input type="checkbox" class="tag-filter" value="__untagged__" checked />
+          <span>Untagged</span>
+        </label>
+      </div>
+
+      <p id="status" class="status" role="status"></p>
+    </section>
+
+    <section id="results" class="results" aria-live="polite"></section>
+
+    <details class="panel log-panel">
+      <summary>Search details &amp; sources</summary>
+      <ul id="log"></ul>
+      <p class="muted small">
+        Events come from structured (schema.org) data published by event sites.
+        Geocoding &amp; distance use OpenStreetMap. Your searches and tags stay on this machine.
+      </p>
+    </details>
+  </div>
+
+  <template id="card-tpl">
+    <article class="card event">
+      <div class="event-main">
+        <h3 class="event-title"><a target="_blank" rel="noopener"></a></h3>
+        <p class="event-meta">
+          <span class="event-when"></span>
+          <span class="dot">·</span>
+          <span class="event-dist"></span>
+          <span class="event-where"></span>
+        </p>
+        <p class="event-desc"></p>
+      </div>
+      <div class="event-tags"></div>
+    </article>
+  </template>
+
+  <script>
+    window.APP_TAGS = {{ all_tags | tojson }};
+    window.APP_TAG_LABELS = {{ tag_labels | tojson }};
+    window.APP_HOME = {{ (settings.home or none) | tojson }};
+    window.APP_RANGE = {{ settings.range_km | tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
