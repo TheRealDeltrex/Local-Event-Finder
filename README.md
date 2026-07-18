@@ -95,3 +95,7 @@ static/style.css       styling
   descriptive User-Agent and ~1 request/second; results are cached on disk to
   stay well within that.
 - Distances are straight-line ("as the crow flies"), not driving distance.
+
+## License
+
+Released under the **GNU General Public License v3.0** — see [LICENSE](LICENSE).
