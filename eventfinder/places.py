@@ -7,6 +7,7 @@ something to show within range. No API key needed.
 """
 from __future__ import annotations
 
+import concurrent.futures
 from typing import Optional
 
 import requests
@@ -23,6 +24,9 @@ OVERPASS_ENDPOINTS = [
     "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ]
 
+# OSM key order to check, most specific first.
+_KEYS = ("tourism", "leisure", "amenity", "historic", "natural")
+
 # OSM (key, value) -> (human label, tags). Drives both the query and tagging.
 CATEGORIES: dict[tuple[str, str], tuple[str, list[str]]] = {
     ("tourism", "museum"): ("Museum", ["family"]),
@@ -37,6 +41,14 @@ CATEGORIES: dict[tuple[str, str], tuple[str, list[str]]] = {
     ("leisure", "garden"): ("Garden", ["date"]),
     ("leisure", "nature_reserve"): ("Nature reserve", []),
     ("leisure", "water_park"): ("Water park", ["family"]),
+    ("leisure", "miniature_golf"): ("Mini golf", ["family"]),
+    ("leisure", "golf_course"): ("Golf course", []),
+    ("leisure", "sports_centre"): ("Sports centre", ["family"]),
+    ("leisure", "swimming_pool"): ("Swimming pool", ["family"]),
+    ("leisure", "bathing_place"): ("Bathing spot", ["family"]),
+    ("leisure", "horse_riding"): ("Horse riding", ["family"]),
+    ("leisure", "playground"): ("Playground", ["family"]),
+    ("leisure", "bird_hide"): ("Bird hide", ["date"]),
     ("amenity", "cinema"): ("Cinema", ["date"]),
     ("amenity", "theatre"): ("Theatre", ["date"]),
     ("amenity", "arts_centre"): ("Arts centre", ["date"]),
@@ -44,6 +56,7 @@ CATEGORIES: dict[tuple[str, str], tuple[str, list[str]]] = {
     ("historic", "monument"): ("Monument", []),
     ("historic", "memorial"): ("Memorial", []),
     ("historic", "ruins"): ("Ruins", ["date"]),
+    ("natural", "beach"): ("Beach", ["family"]),
 }
 
 
@@ -53,45 +66,67 @@ def _values(key: str) -> str:
 
 
 def build_query(lat: float, lon: float, radius_m: int) -> str:
-    # Nodes only: point POIs resolve fast and reliably on the public servers;
-    # querying ways/relations (nwr) forces geometry resolution and routinely
-    # times out over a 40 km radius.
+    # nwr = nodes + ways + relations. Many attractions (parks, museums, the
+    # Rømø labyrinth) are mapped as areas, not points, so a nodes-only query
+    # misses them. `out center` gives each area a representative coordinate.
     clauses = []
-    for key in ("tourism", "leisure", "amenity", "historic"):
+    for key in _KEYS:
         clauses.append(
-            f'node(around:{radius_m},{lat},{lon})["{key}"~"^({_values(key)})$"];'
+            f'nwr(around:{radius_m},{lat},{lon})["{key}"~"^({_values(key)})$"];'
         )
     body = "".join(clauses)
-    return f"[out:json][timeout:25];({body});out 80;"
+    # Output nodes, ways and relations *separately* — a single `out` emits all
+    # nodes first, so a plain cap would exhaust its slots on nodes and drop
+    # every area (the labyrinth is a way). Per-type caps guarantee areas appear.
+    return (
+        f"[out:json][timeout:60];({body})->.a;"
+        f"node.a;out 300;way.a;out center 300;relation.a;out center 100;"
+    )
 
 
 def _category_of(tags: dict) -> Optional[tuple[str, list[str]]]:
-    for key in ("tourism", "leisure", "amenity", "historic"):
+    for key in _KEYS:
         val = tags.get(key)
         if val and (key, val) in CATEGORIES:
             return CATEGORIES[(key, val)]
     return None
 
 
-def fetch_places(lat: float, lon: float, radius_km: float, limit: int = 60) -> list[Event]:
-    """Return named permanent places within radius, nearest first."""
+def _query_one(endpoint: str, query: str) -> Optional[list]:
+    try:
+        resp = requests.post(
+            endpoint,
+            data={"data": query},
+            headers={"User-Agent": geo.USER_AGENT},
+            timeout=55,
+        )
+        if resp.status_code == 200:
+            return resp.json().get("elements", [])
+    except (requests.RequestException, ValueError):
+        return None
+    return None
+
+
+def fetch_places(lat: float, lon: float, radius_km: float, limit: int = 120) -> list[Event]:
+    """Return named permanent places within radius.
+
+    The public Overpass servers are individually slow and unreliable, so we
+    hit all mirrors in parallel and take the first that answers — bounding the
+    wait to the fastest server instead of the sum of their timeouts.
+    """
     radius_m = int(radius_km * 1000)
     query = build_query(lat, lon, radius_m)
     elements = None
-    for endpoint in OVERPASS_ENDPOINTS:
-        try:
-            resp = requests.post(
-                endpoint,
-                data={"data": query},
-                headers={"User-Agent": geo.USER_AGENT},
-                timeout=40,
-            )
-            if resp.status_code != 200:
-                continue
-            elements = resp.json().get("elements", [])
-            break
-        except (requests.RequestException, ValueError):
-            continue
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(OVERPASS_ENDPOINTS))
+    futures = [executor.submit(_query_one, ep, query) for ep in OVERPASS_ENDPOINTS]
+    try:
+        for fut in concurrent.futures.as_completed(futures):
+            res = fut.result()
+            if res is not None:
+                elements = res
+                break
+    finally:
+        executor.shutdown(wait=False)  # don't block on the losing mirrors
     if elements is None:
         return []
 
@@ -131,4 +166,7 @@ def fetch_places(lat: float, lon: float, radius_km: float, limit: int = 60) -> l
                 auto_tags=list(cat_tags),
             )
         )
+    # Overpass returns by id, not distance; keep the nearest `limit` so a close
+    # place (e.g. the labyrinth around the corner) is never truncated away.
+    out.sort(key=lambda e: geo.haversine_km(lat, lon, e.lat, e.lon))
     return out[: max(limit, 0)] if limit else out
