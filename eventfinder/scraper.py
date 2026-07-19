@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import html
 import json
+from datetime import datetime, timedelta, timezone
 from typing import Iterable, Optional
 from urllib.parse import quote
 
@@ -19,6 +20,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from . import geo, tagging
+from .places import fetch_places
 from .models import Event, event_id
 
 BROWSER_UA = (
@@ -185,18 +187,48 @@ def _apply_manual(ev: Event, overrides: dict) -> None:
     ev.tags = sorted(tags)
 
 
+def _parse_start(start: str) -> Optional[datetime]:
+    """Parse an ISO-8601 start string to an aware datetime, or None."""
+    if not start:
+        return None
+    s = start.strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        # try just the date part, e.g. "2026-07-22"
+        try:
+            dt = datetime.fromisoformat(s[:10])
+        except ValueError:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _within_window(dt: Optional[datetime], now: datetime, days: int) -> Optional[bool]:
+    """True if within the window, False if outside, None if undated."""
+    if dt is None:
+        return None
+    return (now - timedelta(days=1)) <= dt <= (now + timedelta(days=days))
+
+
 def run_search(
     place: dict,
     sources: list[dict],
     range_km: float,
     store,
     log: Optional[list] = None,
+    window_days: int = 14,
+    include_places: bool = True,
 ) -> list[Event]:
-    """Scrape all enabled sources and return events within ``range_km``."""
+    """Find things to do within ``range_km``: scheduled events happening in the
+    next ``window_days`` days (plus undated/recurring listings), and permanent
+    places you can visit any day (museums, parks, …)."""
     log = log if log is not None else []
     geocode_cache = store.load_geocode_cache()
     manual = store.load_manual_tags()
     origin_lat, origin_lon = place["lat"], place["lon"]
+    now = datetime.now(timezone.utc)
 
     collected: dict[str, Event] = {}
     for src in sources:
@@ -213,7 +245,14 @@ def run_search(
             collected.setdefault(ev.id, ev)
 
     results: list[Event] = []
+    dropped_old = 0
     for ev in collected.values():
+        # Only keep events happening within the next week (undated listings,
+        # which are often recurring, are kept and shown without a date).
+        in_window = _within_window(_parse_start(ev.start), now, window_days)
+        if in_window is False:
+            dropped_old += 1
+            continue
         # Geocode the venue if the feed didn't already carry coordinates.
         if ev.lat is None or ev.lon is None:
             query = ev.address or ev.locality
@@ -230,8 +269,37 @@ def run_search(
             continue
         _apply_manual(ev, manual)
         results.append(ev)
-
     store.save_geocode_cache(geocode_cache)
-    results.sort(key=lambda e: (e.start or "9999", e.distance_km or 0))
-    log.append(f"{len(results)} event(s) within {range_km:g} km")
+    if dropped_old:
+        log.append(f"skipped {dropped_old} event(s) outside the next {window_days} days")
+
+    # Permanent places (museums, parks, galleries, …) you can visit any day.
+    if include_places:
+        places = fetch_places(origin_lat, origin_lon, range_km)
+        added = 0
+        for ev in places:
+            if ev.id in {e.id for e in results}:
+                continue
+            ev.distance_km = round(
+                geo.haversine_km(origin_lat, origin_lon, ev.lat, ev.lon), 1
+            )
+            if ev.distance_km > range_km:
+                continue
+            _apply_manual(ev, manual)
+            results.append(ev)
+            added += 1
+        log.append(f"{added} permanent place(s) from OpenStreetMap")
+
+    # Upcoming dated events first (by date), then undated events, then permanent
+    # places (nearest first).
+    def sort_key(e: Event):
+        if e.permanent:
+            return (2, e.distance_km or 0.0, "")
+        dt = _parse_start(e.start)
+        if dt is None:
+            return (1, e.distance_km or 0.0, "")
+        return (0, dt.timestamp(), "")
+
+    results.sort(key=sort_key)
+    log.append(f"{len(results)} thing(s) to do within {range_km:g} km")
     return results

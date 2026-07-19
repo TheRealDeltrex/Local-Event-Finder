@@ -9,6 +9,11 @@ const resultsEl = el("#results");
 const rangeEl = el("#range");
 const rangeVal = el("#range-val");
 const logEl = el("#log");
+const dayMinEl = el("#day-min");
+const dayMaxEl = el("#day-max");
+const dateFillEl = el("#date-fill");
+const dateLabelEl = el("#date-label");
+const WINDOW_DAYS = 14;
 
 let allEvents = [];      // everything the last search returned
 let lastSearchRange = 40;
@@ -33,9 +38,41 @@ function activeTagFilters() {
   return on;
 }
 
+// ---- date range (dual slider, day offsets within the 2-week window) ----
+function dayOffset(iso) {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (isNaN(t)) return null;
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  return Math.floor((t - start.getTime()) / 86400000);
+}
+function labelForDay(offset) {
+  if (offset <= 0) return "today";
+  if (offset === 1) return "tomorrow";
+  const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + offset);
+  return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+}
+function updateDateUI() {
+  const a = Number(dayMinEl.value), b = Number(dayMaxEl.value);
+  const lo = Math.min(a, b), hi = Math.max(a, b);
+  dateFillEl.style.left = (lo / WINDOW_DAYS) * 100 + "%";
+  dateFillEl.style.width = ((hi - lo) / WINDOW_DAYS) * 100 + "%";
+  dateLabelEl.textContent =
+    lo === 0 && hi === WINDOW_DAYS ? "next 2 weeks" : `${labelForDay(lo)} → ${labelForDay(hi)}`;
+}
+function inDateRange(ev) {
+  if (ev.permanent) return true;          // any-day places always qualify
+  const off = dayOffset(ev.start);
+  if (off === null) return true;          // undated / recurring listings
+  const lo = Math.min(Number(dayMinEl.value), Number(dayMaxEl.value));
+  const hi = Math.max(Number(dayMinEl.value), Number(dayMaxEl.value));
+  return Math.max(off, 0) >= lo && Math.max(off, 0) <= hi;
+}
+
 // --------------------------------------------------------------- rendering
 function passesFilter(ev, filters, maxRange) {
   if (ev.distance_km != null && ev.distance_km > maxRange) return false;
+  if (!inDateRange(ev)) return false;
   const tags = ev.tags || [];
   if (tags.length === 0) return filters.has("__untagged__");
   return tags.some((t) => filters.has(t));
@@ -52,7 +89,7 @@ function render() {
   }
   if (shown.length === 0) {
     resultsEl.innerHTML =
-      '<p class="empty">No events match these filters. Try widening the range or turning on more tags.</p>';
+      '<p class="empty">Nothing matches these filters. Try widening the distance or date range, or turning on more tags.</p>';
     return;
   }
 
@@ -62,7 +99,8 @@ function render() {
     const a = node.querySelector(".event-title a");
     a.textContent = ev.title;
     a.href = ev.url || "#";
-    node.querySelector(".event-when").textContent = fmtWhen(ev.start);
+    node.querySelector(".event-when").textContent =
+      ev.permanent ? `${ev.category || "Place"} · open any day` : fmtWhen(ev.start);
     node.querySelector(".event-dist").textContent =
       ev.distance_km != null ? `${ev.distance_km} km away` : "";
     node.querySelector(".event-where").textContent = ev.locality ? `· ${ev.locality}` : "";
@@ -182,12 +220,26 @@ document.querySelectorAll(".tag-filter").forEach((c) =>
   c.addEventListener("change", render)
 );
 
+function onDaySlide(e) {
+  // keep the two thumbs from crossing
+  let a = Number(dayMinEl.value), b = Number(dayMaxEl.value);
+  if (a > b) {
+    if (e.target === dayMinEl) dayMaxEl.value = a;
+    else dayMinEl.value = b;
+  }
+  updateDateUI();
+  render();
+}
+dayMinEl.addEventListener("input", onDaySlide);
+dayMaxEl.addEventListener("input", onDaySlide);
+
 // ------------------------------------------------------------------ startup
 (function init() {
   if (window.APP_RANGE) {
     rangeEl.value = Math.min(40, window.APP_RANGE);
     rangeVal.textContent = rangeEl.value;
   }
+  updateDateUI();
   if (window.APP_HOME && window.APP_HOME.label) {
     el("#loc-name").value = window.APP_HOME.label.split(",")[0];
     setStatus(`Last time you searched near ${escapeHtml(window.APP_HOME.label.split(",").slice(0,2).join(", "))}. Search again to refresh.`);

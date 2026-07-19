@@ -145,6 +145,17 @@ fun AppScreen(vm: EventsViewModel, onUseLocation: () -> Unit) {
             steps = 38,
         )
 
+        // ---- date window (drag both ends) ----
+        Text("When: ${dateRangeLabel(state.dayMin, state.dayMax)}",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium)
+        RangeSlider(
+            value = state.dayMin.toFloat()..state.dayMax.toFloat(),
+            onValueChange = { r -> vm.setDayRange(r.start.toInt(), r.endInclusive.toInt()) },
+            valueRange = 0f..WINDOW_DAYS.toFloat(),
+            steps = WINDOW_DAYS - 1,
+        )
+
         // ---- tag filters ----
         Row(
             Modifier.fillMaxWidth(),
@@ -220,7 +231,7 @@ private fun EventCard(ev: Event, onToggleTag: (String) -> Unit) {
             )
             Spacer(Modifier.height(4.dp))
             val meta = buildString {
-                append(formatWhen(ev.start))
+                append(if (ev.permanent) "${ev.category.ifEmpty { "Place" }} · open any day" else formatWhen(ev.start))
                 ev.distanceKm?.let { append("  ·  ${it} km away") }
                 if (ev.locality.isNotEmpty()) append("  ·  ${ev.locality}")
             }
@@ -261,3 +272,15 @@ private fun formatWhen(iso: String): String {
 
 private fun Modifier.clickableIf(enabled: Boolean, onClick: () -> Unit): Modifier =
     if (enabled) this.clickable(onClick = onClick) else this
+
+/** Friendly label for the selected day window, e.g. "today → Sat, 2 Aug". */
+private fun dateRangeLabel(dayMin: Int, dayMax: Int): String {
+    if (dayMin <= 0 && dayMax >= WINDOW_DAYS) return "next 2 weeks"
+    fun lbl(off: Int): String = when {
+        off <= 0 -> "today"
+        off == 1 -> "tomorrow"
+        else -> java.time.LocalDate.now().plusDays(off.toLong())
+            .format(DateTimeFormatter.ofPattern("EEE, d MMM"))
+    }
+    return "${lbl(dayMin)} → ${lbl(dayMax)}"
+}

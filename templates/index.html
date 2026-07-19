@@ -30,6 +30,16 @@
         <input id="range" type="range" min="1" max="40" value="40" step="1" />
       </div>
 
+      <div class="range-row">
+        <label>When: <strong id="date-label">next 2 weeks</strong></label>
+        <div class="dual" id="date-dual">
+          <div class="dual-track"></div>
+          <div class="dual-fill" id="date-fill"></div>
+          <input id="day-min" type="range" min="0" max="14" value="0" step="1" aria-label="Earliest day" />
+          <input id="day-max" type="range" min="0" max="14" value="14" step="1" aria-label="Latest day" />
+        </div>
+      </div>
+
       <div class="filter-row">
         <span class="filter-label">Show:</span>
         {% for tag in all_tags %}
