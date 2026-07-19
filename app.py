@@ -133,4 +133,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5001"))
     if os.environ.get("EVENTFINDER_OPEN", "1") == "1":
         Timer(1.0, _open_browser, args=(port,)).start()
-    app.run(host="127.0.0.1", port=port, debug=bool(os.environ.get("FLASK_DEBUG")))
+    app.run(host="127.0.0.1", port=port, threaded=True, debug=bool(os.environ.get("FLASK_DEBUG")))

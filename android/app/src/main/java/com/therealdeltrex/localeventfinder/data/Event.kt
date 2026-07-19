@@ -17,6 +17,8 @@ data class Event(
     var lat: Double? = null,
     var lon: Double? = null,
     var distanceKm: Double? = null,
+    val permanent: Boolean = false,   // a place you can visit any day
+    val category: String = "",        // e.g. "Museum", "Park"
     val autoTags: Set<String> = emptySet(),
     var tags: Set<String> = emptySet(),
 )
