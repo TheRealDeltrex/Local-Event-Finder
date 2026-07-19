@@ -11,6 +11,12 @@ coordinates. Your searches and your tag choices stay in local files.
 > **📱 Android app:** there's a native Kotlin/Jetpack Compose version in
 > [`android/`](android/) with the same features (device GPS, scraping, tagging,
 > filtering). See [android/README.md](android/README.md) to build it.
+>
+> **🌐 Landing page + APK download:** [`docs/`](docs/) is a GitHub Pages site
+> that runs the web version in the browser and offers the signed Android APK
+> ([`docs/LocalEventFinder.apk`](docs/LocalEventFinder.apk)). Enable it under
+> **Settings → Pages → Deploy from branch → `main` / `/docs`**; it will then be
+> live at `https://therealdeltrex.github.io/Local-Event-Finder/`.
 
 ## What it does
 
