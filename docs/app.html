@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Local Events Finder — web app</title>
+<meta name="description" content="Run the Local Events Finder in your browser — find nearby events, tagged as date ideas or family friendly." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%8D%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="webapp.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <a href="index.html">← Back to home</a>
+      <a href="LocalEventFinder.apk" download>⬇ Download Android app</a>
+    </div>
+
+    <header class="hero">
+      <h1>📍 Local Events Finder</h1>
+      <p>Find things to do near you. Pick a spot, set a range, and mark events as date ideas or family friendly.</p>
+    </header>
+
+    <div class="banner">
+      <strong>In-browser demo.</strong> The interface is fully live here — location, distance, tagging and
+      filtering all work. But browsers can't fetch the event sites directly (no CORS), so when a live scrape
+      isn't reachable this demo falls back to <strong>sample events near your location</strong>. For real
+      listings, install the <a href="LocalEventFinder.apk" download style="color:var(--accent)">Android app</a>
+      or run the local Flask app (see the <a href="index.html" style="color:var(--accent)">home page</a>).
+    </div>
+
+    <section class="panel controls">
+      <div class="loc-row">
+        <button id="btn-geo" class="btn ghost" type="button">📡 Use my location</button>
+        <span class="or">or</span>
+        <input id="loc-name" type="text" placeholder="Type a town or city (e.g. Cologne)" autocomplete="off" />
+        <button id="btn-search" class="btn" type="button">Search</button>
+      </div>
+
+      <div class="range-row">
+        <label for="range">Range: <strong id="range-val">40</strong> km</label>
+        <input id="range" type="range" min="1" max="40" value="40" step="1" />
+      </div>
+
+      <div class="filter-row">
+        <span class="filter-label">Show:</span>
+        <label class="chip-toggle"><input type="checkbox" class="tag-filter" value="date" checked /><span>Possible date</span></label>
+        <label class="chip-toggle"><input type="checkbox" class="tag-filter" value="family" checked /><span>Family friendly</span></label>
+        <label class="chip-toggle"><input type="checkbox" class="tag-filter" value="__untagged__" checked /><span>Untagged</span></label>
+      </div>
+
+      <p id="status" class="status" role="status"></p>
+    </section>
+
+    <section id="results" class="results" aria-live="polite"></section>
+
+    <details class="panel log-panel">
+      <summary>Search details &amp; sources</summary>
+      <ul id="log"></ul>
+      <p class="muted small">
+        Events come from structured (schema.org) data published by event sites, fetched via a public CORS proxy.
+        Geocoding &amp; distance use OpenStreetMap. Your searches and tags stay in this browser (localStorage).
+      </p>
+    </details>
+
+    <footer class="credit">Created by Deltrex · <a href="https://github.com/TheRealDeltrex/Local-Event-Finder" style="color:var(--accent)">source on GitHub</a></footer>
+  </div>
+
+  <script src="webapp.js"></script>
+</body>
+</html>

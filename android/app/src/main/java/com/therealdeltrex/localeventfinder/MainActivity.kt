@@ -193,6 +193,15 @@ fun AppScreen(vm: EventsViewModel, onUseLocation: () -> Unit) {
                 EventCard(ev) { tag -> vm.toggleTag(ev, tag) }
             }
         }
+
+        Spacer(Modifier.height(20.dp))
+        Text(
+            "Created by Deltrex",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
     }
 }
 
