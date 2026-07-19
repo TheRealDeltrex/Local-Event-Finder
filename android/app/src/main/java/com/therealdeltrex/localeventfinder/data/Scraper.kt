@@ -8,6 +8,11 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.Jsoup
+import java.time.Instant
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 
 /**
  * The scraping pipeline, ported from the web app's scraper.py.
@@ -17,6 +22,8 @@ import org.jsoup.Jsoup
  * events with a geocodable address are kept; online-only events are skipped.
  */
 class Scraper(private val client: OkHttpClient, private val geo: Geo) {
+
+    private val places = Places(client)
 
     private val browserUa =
         "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) " +
@@ -167,6 +174,8 @@ class Scraper(private val client: OkHttpClient, private val geo: Geo) {
         rangeKm: Double,
         overrides: Map<String, TagOverride>,
         log: MutableList<String>,
+        windowDays: Long = 14,
+        includePlaces: Boolean = true,
     ): List<Event> {
         val collected = LinkedHashMap<String, Event>()
         for (src in sources) {
@@ -182,8 +191,18 @@ class Scraper(private val client: OkHttpClient, private val geo: Geo) {
             for (ev in found) collected.putIfAbsent(ev.id, ev)
         }
 
+        val now = Instant.now()
+        val windowStart = now.minus(1, ChronoUnit.DAYS)
+        val windowEnd = now.plus(windowDays, ChronoUnit.DAYS)
         val results = ArrayList<Event>()
+        var droppedOld = 0
         for (ev in collected.values) {
+            // Keep events in the next `windowDays`; undated listings are kept.
+            val dt = parseStart(ev.start)
+            if (dt != null && (dt.isBefore(windowStart) || dt.isAfter(windowEnd))) {
+                droppedOld++
+                continue
+            }
             if (ev.lat == null || ev.lon == null) {
                 val query = ev.address.ifEmpty { ev.locality }
                 if (query.isEmpty()) continue
@@ -197,9 +216,50 @@ class Scraper(private val client: OkHttpClient, private val geo: Geo) {
             ev.tags = effectiveTags(ev, overrides[ev.id])
             results.add(ev)
         }
-        results.sortWith(compareBy({ it.start.ifEmpty { "9999" } }, { it.distanceKm ?: 0.0 }))
-        log.add("${results.size} event(s) within ${rangeKm.toInt()} km")
+        if (droppedOld > 0) log.add("skipped $droppedOld event(s) outside the next $windowDays days")
+
+        // Permanent places you can visit any day (OpenStreetMap).
+        if (includePlaces) {
+            val existing = results.map { it.id }.toHashSet()
+            var added = 0
+            for (ev in places.fetch(place.lat, place.lon, rangeKm)) {
+                if (ev.id in existing) continue
+                val d = Geo.haversineKm(place.lat, place.lon, ev.lat!!, ev.lon!!)
+                ev.distanceKm = Math.round(d * 10) / 10.0
+                if (ev.distanceKm!! > rangeKm) continue
+                ev.tags = effectiveTags(ev, overrides[ev.id])
+                results.add(ev)
+                added++
+            }
+            log.add("$added permanent place(s) from OpenStreetMap")
+        }
+
+        // Upcoming dated events first (by date), then undated events, then
+        // permanent places (nearest first).
+        results.sortWith(compareBy({ sortGroup(it) }, { sortValue(it) }))
+        log.add("${results.size} thing(s) to do within ${rangeKm.toInt()} km")
         return results
+    }
+
+    private fun parseStart(s: String): Instant? {
+        if (s.isBlank()) return null
+        return try {
+            OffsetDateTime.parse(s).toInstant()
+        } catch (e: Exception) {
+            try {
+                LocalDate.parse(s.take(10)).atStartOfDay(ZoneOffset.UTC).toInstant()
+            } catch (e2: Exception) {
+                null
+            }
+        }
+    }
+
+    private fun sortGroup(e: Event): Int =
+        if (e.permanent) 2 else if (parseStart(e.start) == null) 1 else 0
+
+    private fun sortValue(e: Event): Double {
+        val dt = if (e.permanent) null else parseStart(e.start)
+        return dt?.toEpochMilli()?.toDouble() ?: (e.distanceKm ?: 0.0)
     }
 
     private fun effectiveTags(ev: Event, override: TagOverride?): Set<String> {

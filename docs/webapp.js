@@ -180,8 +180,79 @@ function effectiveTags(ev) {
   return [...t];
 }
 
-// Sample events, positioned around the resolved location, used when live
-// scraping isn't reachable from a static page (see the note in search()).
+// ---- permanent places (OpenStreetMap / Overpass, CORS-enabled) ------------
+const OVERPASS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+];
+// "key|value": [label, tags]
+const POI_CATS = {
+  "tourism|museum": ["Museum", ["family"]], "tourism|gallery": ["Gallery", ["date"]],
+  "tourism|zoo": ["Zoo", ["family"]], "tourism|theme_park": ["Theme park", ["family"]],
+  "tourism|aquarium": ["Aquarium", ["family"]], "tourism|attraction": ["Attraction", []],
+  "tourism|viewpoint": ["Viewpoint", ["date"]], "tourism|artwork": ["Public art", ["date"]],
+  "leisure|park": ["Park", ["family"]], "leisure|garden": ["Garden", ["date"]],
+  "leisure|nature_reserve": ["Nature reserve", []], "leisure|water_park": ["Water park", ["family"]],
+  "amenity|cinema": ["Cinema", ["date"]], "amenity|theatre": ["Theatre", ["date"]],
+  "amenity|arts_centre": ["Arts centre", ["date"]],
+  "historic|castle": ["Castle", ["date"]], "historic|monument": ["Monument", []],
+  "historic|memorial": ["Memorial", []], "historic|ruins": ["Ruins", ["date"]],
+};
+function overpassQuery(lat, lon, r) {
+  // Nodes only — fast and reliable on the public servers (see places.py).
+  const keys = { tourism: [], leisure: [], amenity: [], historic: [] };
+  for (const k in POI_CATS) { const [key, val] = k.split("|"); keys[key].push(val); }
+  const body = Object.entries(keys)
+    .map(([key, vals]) => `node(around:${r},${lat},${lon})["${key}"~"^(${vals.join("|")})$"];`).join("");
+  return `[out:json][timeout:25];(${body});out 80;`;
+}
+function catOf(tags) {
+  for (const key of ["tourism", "leisure", "amenity", "historic"]) {
+    const v = tags[key]; if (v && POI_CATS[`${key}|${v}`]) return POI_CATS[`${key}|${v}`];
+  }
+  return null;
+}
+async function fetchPlaces(lat, lon, rangeKm) {
+  const q = overpassQuery(lat, lon, Math.round(rangeKm * 1000));
+  let elements = null;
+  for (const ep of OVERPASS) {
+    try {
+      const resp = await fetch(ep, {
+        method: "POST", body: "data=" + encodeURIComponent(q),
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        signal: AbortSignal.timeout(40000),
+      });
+      if (!resp.ok) continue;
+      elements = (await resp.json()).elements || []; break;
+    } catch (e) { continue; }
+  }
+  if (!elements) return [];
+  const seen = new Set(), out = [];
+  for (const el of elements) {
+    const tags = el.tags || {}, name = tags.name; if (!name) continue;
+    const cat = catOf(tags); if (!cat) continue;
+    const plat = el.lat ?? el.center?.lat, plon = el.lon ?? el.center?.lon;
+    if (plat == null || plon == null) continue;
+    const key = `${name.toLowerCase()}|${cat[0]}`; if (seen.has(key)) continue; seen.add(key);
+    const url = tags.website || tags["contact:website"] || `https://www.openstreetmap.org/${el.type}/${el.id}`;
+    out.push({ id: "poi-" + el.type + "-" + el.id, title: name, url, source: "OpenStreetMap",
+      description: cat[0], permanent: true, category: cat[0], start: "",
+      locality: tags["addr:city"] || "", lat: +plat, lon: +plon, autoTags: [...cat[1]], tags: [] });
+  }
+  return out;
+}
+const WINDOW_DAYS = 14;
+function withinWindow(startISO) {
+  if (!startISO) return null;
+  const t = Date.parse(startISO); if (isNaN(t)) return null;
+  const now = Date.now();
+  return t >= now - 864e5 && t <= now + WINDOW_DAYS * 864e5;
+}
+
+// Sample events, positioned around the resolved location, used only when both
+// live scraping AND OpenStreetMap are unreachable (see runSearch()).
 const SAMPLE = [
   { t: "Candlelight Jazz & Wine Tasting", d: "A romantic evening of live jazz and local wines.", km: 1.2, h: 19 },
   { t: "Rooftop Cocktails & Live Music", d: "Sunset cocktails with an acoustic set.", km: 2.4, h: 20 },
@@ -210,23 +281,43 @@ function makeSampleEvents(place) {
 
 async function runSearch(place, rangeKm, log) {
   const collected = new Map();
+
+  // 1) scheduled events happening in the next week (undated listings kept too)
+  let dropped = 0;
   for (const src of SOURCES) {
     try {
       const html = await fetchSource(buildUrl(src.url, place));
       const found = extractEvents(html, src.name);
-      log.push(`${src.name}: ${found.length} event(s) with structured data`);
-      for (const ev of found) if (!collected.has(ev.id)) collected.set(ev.id, ev);
+      let kept = 0;
+      for (const ev of found) {
+        if (withinWindow(ev.start) === false) { dropped++; continue; }
+        if (!collected.has(ev.id)) { collected.set(ev.id, ev); kept++; }
+      }
+      log.push(`${src.name}: ${kept} event(s) in the next 2 weeks (of ${found.length})`);
     } catch (e) {
-      log.push(`${src.name}: live scrape unavailable (${e.message})`);
+      log.push(`${src.name}: live scrape unavailable in-browser (${e.message})`);
     }
   }
+  if (dropped) log.push(`skipped ${dropped} event(s) outside the next ${WINDOW_DAYS} days`);
+
+  // 2) permanent places you can visit any day (OpenStreetMap)
+  try {
+    const places = await fetchPlaces(place.lat, place.lon, rangeKm);
+    log.push(`${places.length} permanent place(s) from OpenStreetMap`);
+    for (const ev of places) if (!collected.has(ev.id)) collected.set(ev.id, ev);
+  } catch (e) {
+    log.push(`OpenStreetMap unavailable (${e.message})`);
+  }
+
+  // 3) only if we genuinely found nothing, fall back to sample events
   if (collected.size === 0) {
-    log.push("Live sources unreachable from the browser — showing sample events.");
+    log.push("Nothing reachable from the browser — showing sample events.");
     for (const ev of makeSampleEvents(place)) collected.set(ev.id, ev);
     window.__lef_sample = true;
   } else {
     window.__lef_sample = false;
   }
+
   const results = [];
   for (const ev of collected.values()) {
     if (ev.lat == null || ev.lon == null) {
@@ -239,8 +330,14 @@ async function runSearch(place, rangeKm, log) {
     ev.tags = effectiveTags(ev);
     results.push(ev);
   }
-  results.sort((a, b) => (a.start || "9999").localeCompare(b.start || "9999") || a.distance_km - b.distance_km);
-  log.push(`${results.length} event(s) within ${rangeKm} km`);
+  // upcoming dated events first, then undated events, then permanent (nearest)
+  const rank = (e) => {
+    if (e.permanent) return [2, e.distance_km || 0];
+    const t = Date.parse(e.start);
+    return isNaN(t) ? [1, e.distance_km || 0] : [0, t];
+  };
+  results.sort((a, b) => { const ka = rank(a), kb = rank(b); return ka[0] - kb[0] || ka[1] - kb[1]; });
+  log.push(`${results.length} thing(s) to do within ${rangeKm} km`);
   return results;
 }
 
@@ -260,21 +357,54 @@ function fmtWhen(iso) {
 }
 function activeFilters() { const on = new Set(); document.querySelectorAll(".tag-filter:checked").forEach((c) => on.add(c.value)); return on; }
 
+// ---- date range (dual slider, day offsets within the 2-week window) ----
+function dayOffset(iso) {
+  if (!iso) return null;
+  const t = Date.parse(iso); if (isNaN(t)) return null;
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  return Math.floor((t - start.getTime()) / 864e5);
+}
+function labelForDay(off) {
+  if (off <= 0) return "today";
+  if (off === 1) return "tomorrow";
+  const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + off);
+  return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+}
+function dayBounds() {
+  const a = Number(el("#day-min").value), b = Number(el("#day-max").value);
+  return [Math.min(a, b), Math.max(a, b)];
+}
+function updateDateUI() {
+  const [lo, hi] = dayBounds(), fill = el("#date-fill");
+  fill.style.left = (lo / WINDOW_DAYS) * 100 + "%";
+  fill.style.width = ((hi - lo) / WINDOW_DAYS) * 100 + "%";
+  el("#date-label").textContent =
+    lo === 0 && hi === WINDOW_DAYS ? "next 2 weeks" : `${labelForDay(lo)} → ${labelForDay(hi)}`;
+}
+function inDateRange(ev) {
+  if (ev.permanent) return true;
+  const off = dayOffset(ev.start);
+  if (off === null) return true;
+  const [lo, hi] = dayBounds();
+  return Math.max(off, 0) >= lo && Math.max(off, 0) <= hi;
+}
+
 function render() {
   const filters = activeFilters(), maxR = Number(el("#range").value), box = el("#results");
   box.innerHTML = "";
   const shown = allEvents.filter((ev) => {
     if (ev.distance_km != null && ev.distance_km > maxR) return false;
+    if (!inDateRange(ev)) return false;
     if (!ev.tags.length) return filters.has("__untagged__");
     return ev.tags.some((t) => filters.has(t));
   });
   if (!allEvents.length) return;
-  if (!shown.length) { box.innerHTML = '<p class="empty">No events match these filters. Widen the range or turn on more tags.</p>'; return; }
+  if (!shown.length) { box.innerHTML = '<p class="empty">Nothing matches these filters. Widen the distance or date range, or turn on more tags.</p>'; return; }
   for (const ev of shown) {
     const card = document.createElement("article"); card.className = "card event";
     card.innerHTML = `<div class="event-main">
       <h3 class="event-title"><a target="_blank" rel="noopener" href="${esc(ev.url || "#")}">${esc(ev.title)}</a></h3>
-      <p class="event-meta"><span>${esc(fmtWhen(ev.start))}</span><span class="dot">·</span>
+      <p class="event-meta"><span>${esc(ev.permanent ? `${ev.category || "Place"} · open any day` : fmtWhen(ev.start))}</span><span class="dot">·</span>
         <span class="event-dist">${ev.distance_km} km away</span>${ev.locality ? `<span>· ${esc(ev.locality)}</span>` : ""}</p>
       ${ev.description ? `<p class="event-desc">${esc(ev.description)}</p>` : ""}
     </div><div class="event-tags"></div>`;
@@ -316,7 +446,7 @@ async function search(resolver) {
     if (window.__lef_sample) {
       setStatus(`Live scraping isn't available in this static browser demo — showing ${within} <strong>sample</strong> event(s) near ${esc(near)} so you can try the interface. Install the Android app or run the local version for real listings.`);
     } else if (within) {
-      setStatus(`${within} event(s) within ${range} km of ${esc(near)}.`);
+      setStatus(`${within} thing(s) to do within ${range} km of ${esc(near)}.`);
     } else {
       setStatus(`No events within ${range} km of ${esc(near)}. Try a wider range.`, true);
     }
@@ -344,4 +474,15 @@ el("#btn-geo").onclick = () => {
 };
 el("#range").addEventListener("input", () => { el("#range-val").textContent = el("#range").value; render(); });
 document.querySelectorAll(".tag-filter").forEach((c) => c.addEventListener("change", render));
+
+function onDaySlide(e) {
+  const mn = el("#day-min"), mx = el("#day-max");
+  let a = Number(mn.value), b = Number(mx.value);
+  if (a > b) { if (e.target === mn) mx.value = a; else mn.value = b; }
+  updateDateUI();
+  render();
+}
+el("#day-min").addEventListener("input", onDaySlide);
+el("#day-max").addEventListener("input", onDaySlide);
+updateDateUI();
 setStatus("Share your location or type a place to start.");
