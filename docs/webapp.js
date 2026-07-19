@@ -187,6 +187,7 @@ const OVERPASS = [
   "https://overpass.private.coffee/api/interpreter",
   "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ];
+const POI_KEYS = ["tourism", "leisure", "amenity", "historic", "natural"];
 // "key|value": [label, tags]
 const POI_CATS = {
   "tourism|museum": ["Museum", ["family"]], "tourism|gallery": ["Gallery", ["date"]],
@@ -195,40 +196,50 @@ const POI_CATS = {
   "tourism|viewpoint": ["Viewpoint", ["date"]], "tourism|artwork": ["Public art", ["date"]],
   "leisure|park": ["Park", ["family"]], "leisure|garden": ["Garden", ["date"]],
   "leisure|nature_reserve": ["Nature reserve", []], "leisure|water_park": ["Water park", ["family"]],
+  "leisure|miniature_golf": ["Mini golf", ["family"]], "leisure|golf_course": ["Golf course", []],
+  "leisure|sports_centre": ["Sports centre", ["family"]], "leisure|swimming_pool": ["Swimming pool", ["family"]],
+  "leisure|bathing_place": ["Bathing spot", ["family"]], "leisure|horse_riding": ["Horse riding", ["family"]],
+  "leisure|playground": ["Playground", ["family"]], "leisure|bird_hide": ["Bird hide", ["date"]],
   "amenity|cinema": ["Cinema", ["date"]], "amenity|theatre": ["Theatre", ["date"]],
   "amenity|arts_centre": ["Arts centre", ["date"]],
   "historic|castle": ["Castle", ["date"]], "historic|monument": ["Monument", []],
   "historic|memorial": ["Memorial", []], "historic|ruins": ["Ruins", ["date"]],
+  "natural|beach": ["Beach", ["family"]],
 };
 function overpassQuery(lat, lon, r) {
-  // Nodes only — fast and reliable on the public servers (see places.py).
-  const keys = { tourism: [], leisure: [], amenity: [], historic: [] };
+  // nwr = nodes+ways+relations (many attractions are areas, e.g. the labyrinth);
+  // output each type separately so a single cap can't drop all the areas.
+  const keys = {}; POI_KEYS.forEach((k) => (keys[k] = []));
   for (const k in POI_CATS) { const [key, val] = k.split("|"); keys[key].push(val); }
-  const body = Object.entries(keys)
-    .map(([key, vals]) => `node(around:${r},${lat},${lon})["${key}"~"^(${vals.join("|")})$"];`).join("");
-  return `[out:json][timeout:25];(${body});out 80;`;
+  const body = Object.entries(keys).filter(([, v]) => v.length)
+    .map(([key, vals]) => `nwr(around:${r},${lat},${lon})["${key}"~"^(${vals.join("|")})$"];`).join("");
+  return `[out:json][timeout:60];(${body})->.a;node.a;out 300;way.a;out center 300;relation.a;out center 100;`;
 }
 function catOf(tags) {
-  for (const key of ["tourism", "leisure", "amenity", "historic"]) {
+  for (const key of POI_KEYS) {
     const v = tags[key]; if (v && POI_CATS[`${key}|${v}`]) return POI_CATS[`${key}|${v}`];
   }
   return null;
 }
 async function fetchPlaces(lat, lon, rangeKm) {
   const q = overpassQuery(lat, lon, Math.round(rangeKm * 1000));
-  let elements = null;
-  for (const ep of OVERPASS) {
-    try {
-      const resp = await fetch(ep, {
-        method: "POST", body: "data=" + encodeURIComponent(q),
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        signal: AbortSignal.timeout(40000),
-      });
-      if (!resp.ok) continue;
-      elements = (await resp.json()).elements || []; break;
-    } catch (e) { continue; }
-  }
-  if (!elements) return [];
+  const tryEndpoint = async (ep) => {
+    const resp = await fetch(ep, {
+      method: "POST", body: "data=" + encodeURIComponent(q),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      signal: AbortSignal.timeout(55000),
+    });
+    if (!resp.ok) throw new Error(`${ep} ${resp.status}`);
+    const arr = (await resp.json()).elements;
+    if (!arr) throw new Error("no elements");
+    return arr;
+  };
+  let elements;
+  try {
+    // hit all mirrors at once, take the first that answers
+    elements = await Promise.any(OVERPASS.map(tryEndpoint));
+  } catch (e) { return []; }
+
   const seen = new Set(), out = [];
   for (const el of elements) {
     const tags = el.tags || {}, name = tags.name; if (!name) continue;
@@ -241,7 +252,9 @@ async function fetchPlaces(lat, lon, rangeKm) {
       description: cat[0], permanent: true, category: cat[0], start: "",
       locality: tags["addr:city"] || "", lat: +plat, lon: +plon, autoTags: [...cat[1]], tags: [] });
   }
-  return out;
+  // nearest first, then cap — so a close area is never truncated away
+  out.sort((a, b) => haversine(lat, lon, a.lat, a.lon) - haversine(lat, lon, b.lat, b.lon));
+  return out.slice(0, 120);
 }
 const WINDOW_DAYS = 14;
 function withinWindow(startISO) {
