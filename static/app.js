@@ -13,7 +13,9 @@ const dayMinEl = el("#day-min");
 const dayMaxEl = el("#day-max");
 const dateFillEl = el("#date-fill");
 const dateLabelEl = el("#date-label");
-const WINDOW_DAYS = 365;
+// The backend fetches a year of events; the date slider *views* two weeks by
+// default and extends to a year via the "1 year" toggle (no re-search).
+let viewWindow = 14;
 
 let allEvents = [];      // everything the last search returned
 let lastSearchRange = 40;
@@ -77,10 +79,22 @@ function labelForDay(offset) {
 function updateDateUI() {
   const a = Number(dayMinEl.value), b = Number(dayMaxEl.value);
   const lo = Math.min(a, b), hi = Math.max(a, b);
-  dateFillEl.style.left = (lo / WINDOW_DAYS) * 100 + "%";
-  dateFillEl.style.width = ((hi - lo) / WINDOW_DAYS) * 100 + "%";
+  dateFillEl.style.left = (lo / viewWindow) * 100 + "%";
+  dateFillEl.style.width = ((hi - lo) / viewWindow) * 100 + "%";
   dateLabelEl.textContent =
-    lo === 0 && hi === WINDOW_DAYS ? "next 12 months" : `${labelForDay(lo)} → ${labelForDay(hi)}`;
+    lo === 0 && hi === viewWindow
+      ? (viewWindow >= 365 ? "next 12 months" : "next 2 weeks")
+      : `${labelForDay(lo)} → ${labelForDay(hi)}`;
+}
+// Switch the date-slider span between 2 weeks and a year (client-side only).
+function setViewWindow(days) {
+  viewWindow = days;
+  dayMinEl.max = String(days);
+  dayMaxEl.max = String(days);
+  dayMinEl.value = "0";
+  dayMaxEl.value = String(days);   // show the full new range
+  updateDateUI();
+  render();
 }
 function inDateRange(ev) {
   if (ev.permanent) return true;          // any-day places always qualify
@@ -264,13 +278,18 @@ function onDaySlide(e) {
 dayMinEl.addEventListener("input", onDaySlide);
 dayMaxEl.addEventListener("input", onDaySlide);
 
+const extendEl = el("#extend-year");
+if (extendEl) {
+  extendEl.addEventListener("change", () => setViewWindow(extendEl.checked ? 365 : 14));
+}
+
 // ------------------------------------------------------------------ startup
 (function init() {
   if (window.APP_RANGE) {
     rangeEl.value = Math.min(40, window.APP_RANGE);
     rangeVal.textContent = rangeEl.value;
   }
-  updateDateUI();
+  setViewWindow(14);   // default to a two-week view
   if (window.APP_HOME && window.APP_HOME.label) {
     el("#loc-name").value = window.APP_HOME.label.split(",")[0];
     setStatus(`Last time you searched near ${escapeHtml(window.APP_HOME.label.split(",").slice(0,2).join(", "))}. Search again to refresh.`);

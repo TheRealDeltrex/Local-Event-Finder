@@ -27,8 +27,9 @@ data class UiState(
     val status: String = "Share your location or type a place to start.",
     val events: List<Event> = emptyList(),
     val rangeKm: Int = 40,
-    val dayMin: Int = 0,        // date-window start (days from today)
-    val dayMax: Int = WINDOW_DAYS,
+    val dayMin: Int = 0,           // date-window start (days from today)
+    val dayMax: Int = 14,          // date-window end; two weeks by default
+    val viewWindowDays: Int = 14,  // slider span: 14 (2 weeks) or 365 (1 year)
     val filters: Set<String> = setOf(Tagging.TAG_DATE, Tagging.TAG_FAMILY, UNTAGGED, PERMANENT),
     val log: List<String> = emptyList(),
 ) {
@@ -94,7 +95,18 @@ class EventsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setDayRange(min: Int, max: Int) {
-        _state.update { it.copy(dayMin = min.coerceIn(0, WINDOW_DAYS), dayMax = max.coerceIn(0, WINDOW_DAYS)) }
+        _state.update {
+            it.copy(
+                dayMin = min.coerceIn(0, it.viewWindowDays),
+                dayMax = max.coerceIn(0, it.viewWindowDays),
+            )
+        }
+    }
+
+    /** Extend the date slider to a year (events are already fetched for a year). */
+    fun setExtended(extended: Boolean) {
+        val span = if (extended) WINDOW_DAYS else 14
+        _state.update { it.copy(viewWindowDays = span, dayMin = 0, dayMax = span) }
     }
 
     fun toggleFilter(tag: String, on: Boolean) {
