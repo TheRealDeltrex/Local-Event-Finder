@@ -124,7 +124,7 @@ function render() {
     a.textContent = ev.title;
     a.href = ev.url || "#";
     node.querySelector(".event-when").textContent = ev.permanent
-      ? `${ev.category || "Place"} · ${ev.hours ? prettyHours(ev.hours) : "open any day"}`
+      ? `${ev.category || "Place"} · ${ev.hours ? prettyHours(ev.hours) : "permanent"}`
       : fmtWhenRange(ev.start, ev.end);
     const distEl = node.querySelector(".event-dist");
     if (ev.distance_km != null) {

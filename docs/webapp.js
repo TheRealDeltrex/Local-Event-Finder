@@ -449,7 +449,7 @@ function render() {
   for (const ev of shown) {
     const card = document.createElement("article"); card.className = "card event";
     const whenText = ev.permanent
-      ? `${ev.category || "Place"} · ${ev.hours ? prettyHours(ev.hours) : "open any day"}`
+      ? `${ev.category || "Place"} · ${ev.hours ? prettyHours(ev.hours) : "permanent"}`
       : fmtWhenRange(ev.start, ev.end);
     const descText = ev.permanent ? "" : (ev.description || "");
     card.innerHTML = `<div class="event-main">
