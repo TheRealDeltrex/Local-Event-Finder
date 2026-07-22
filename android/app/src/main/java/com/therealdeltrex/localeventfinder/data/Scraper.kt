@@ -45,6 +45,43 @@ class Scraper(private val client: OkHttpClient, private val geo: Geo) {
         }
     }
 
+    // ---- AllEvents city-slug resolution ---------------------------------
+    private fun stripDiacritics(s: String): String =
+        java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFKD)
+            .replace(Regex("\\p{M}+"), "")
+
+    private fun citySlugCandidates(place: Place): List<String> {
+        val names = listOf(place.cityLocal, place.city).filter { it.isNotBlank() }
+            .ifEmpty { listOf(place.label.substringBefore(",")) }
+        val out = LinkedHashSet<String>()
+        for (n in names) {
+            val base = n.trim().lowercase().replace(" ", "-")
+            if (base.isNotEmpty()) out.add(base)
+            val ascii = stripDiacritics(base)
+            if (ascii.isNotEmpty()) out.add(ascii)
+        }
+        return out.toList()
+    }
+
+    /** Pick the AllEvents slug whose /all events are near the origin; return it
+     *  with the fetched page so it can be reused. */
+    private suspend fun resolveAllEventsSlug(place: Place, rangeKm: Double): Pair<String?, String?> {
+        var first: Pair<String?, String?> = null to null
+        for (slug in citySlugCandidates(place)) {
+            val enc = java.net.URLEncoder.encode(slug, "UTF-8")
+            val html = fetch("https://allevents.in/$enc/all")
+            if (first.first == null) first = slug to html
+            if (html == null) continue
+            val events = extractEvents(html, "AllEvents")
+            if (events.any {
+                    it.lat != null && Geo.haversineKm(place.lat, place.lon, it.lat!!, it.lon!!) <= rangeKm
+                }) {
+                return slug to html
+            }
+        }
+        return first
+    }
+
     // ---- JSON-LD extraction ---------------------------------------------
     /** Collect every JSON object node, unwrapping @graph and arrays. */
     private fun collectNodes(root: Any, out: MutableList<JSONObject>) {
@@ -174,14 +211,30 @@ class Scraper(private val client: OkHttpClient, private val geo: Geo) {
         rangeKm: Double,
         overrides: Map<String, TagOverride>,
         log: MutableList<String>,
-        windowDays: Long = 14,
+        windowDays: Long = 365,
         includePlaces: Boolean = true,
     ): List<Event> {
+        val enabled = sources.filter { it.enabled }
+        // City names localize badly (Nominatim gives "Hanover", AllEvents wants
+        // "hannover"); pick the slug whose /all events are actually near, reusing
+        // the winning page.
+        var aeSlug: String? = null
+        var aeAllHtml: String? = null
+        if (enabled.any { it.url.contains("allevents.in") }) {
+            val resolved = resolveAllEventsSlug(place, rangeKm)
+            aeSlug = resolved.first
+            aeAllHtml = resolved.second
+            if (aeSlug != null) log.add("AllEvents city slug: $aeSlug")
+        }
+
         val collected = LinkedHashMap<String, Event>()
-        for (src in sources) {
-            if (!src.enabled) continue
-            val url = Sources.buildUrl(src.url, place)
-            val html = fetch(url)
+        for (src in enabled) {
+            val isAllEvents = src.url.contains("allevents.in")
+            val html = if (isAllEvents && src.url.endsWith("/all") && aeAllHtml != null) {
+                aeAllHtml
+            } else {
+                fetch(Sources.buildUrl(src.url, place, if (isAllEvents) aeSlug else null))
+            }
             if (html == null) {
                 log.add("${src.name}: could not fetch")
                 continue

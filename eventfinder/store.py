@@ -22,12 +22,16 @@ DEFAULT_SOURCES = [
         "url": "https://www.meetup.com/find/?location={cc}--{city}&source=EVENTS",
         "enabled": True,
     },
-    {
-        "name": "AllEvents",
-        # {city_lower} is the lowercased, hyphenated city slug.
-        "url": "https://allevents.in/{city_lower}/all",
-        "enabled": True,
-    },
+    # AllEvents aggregates ticketed venue events (concerts, theatre, comedy,
+    # shows). Its per-category pages surface different events than /all, so we
+    # pull several to cover the full range of "evening-filling" things to do.
+    # {city_lower} is the lowercased, hyphenated city slug.
+    {"name": "AllEvents", "url": "https://allevents.in/{city_lower}/all", "enabled": True},
+    {"name": "AllEvents · Music", "url": "https://allevents.in/{city_lower}/music", "enabled": True},
+    {"name": "AllEvents · Theatre", "url": "https://allevents.in/{city_lower}/theatre", "enabled": True},
+    {"name": "AllEvents · Comedy", "url": "https://allevents.in/{city_lower}/comedy", "enabled": True},
+    {"name": "AllEvents · Arts", "url": "https://allevents.in/{city_lower}/arts", "enabled": True},
+    {"name": "AllEvents · Nightlife", "url": "https://allevents.in/{city_lower}/nightlife", "enabled": True},
 ]
 
 
@@ -82,7 +86,9 @@ class Store:
         settings = self._read(self.settings_path, {})
         settings.setdefault("home", None)          # {"lat","lon","label"} or None
         settings.setdefault("range_km", 40)
-        settings.setdefault("sources", DEFAULT_SOURCES)
+        # Always use the current default source list so shipped improvements
+        # (new categories, fixes) apply even to an existing settings.json.
+        settings["sources"] = DEFAULT_SOURCES
         return settings
 
     def save_settings(self, settings: dict) -> None:
