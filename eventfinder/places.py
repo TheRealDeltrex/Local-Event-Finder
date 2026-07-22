@@ -118,6 +118,48 @@ def _query_one(endpoint: str, query: str) -> Optional[list]:
     return None
 
 
+def run_overpass(query: str) -> Optional[list]:
+    """Run an Overpass query against all mirrors in parallel, returning the
+    elements from the first that answers (or None)."""
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(OVERPASS_ENDPOINTS))
+    futures = [executor.submit(_query_one, ep, query) for ep in OVERPASS_ENDPOINTS]
+    try:
+        for fut in concurrent.futures.as_completed(futures):
+            res = fut.result()
+            if res is not None:
+                return res
+    finally:
+        executor.shutdown(wait=False)  # don't block on the losing mirrors
+    return None
+
+
+def nearby_localities(lat: float, lon: float, radius_km: float, limit: int = 8) -> list[str]:
+    """Nearest named towns/cities within the radius — used to look up events in
+    neighbouring places, not just the origin's own (which may have none)."""
+    radius_m = int(radius_km * 1000)
+    # `out` (body) gives coordinates + tags for nodes; `out tags` omits coords.
+    query = (
+        f'[out:json][timeout:40];'
+        f'(node(around:{radius_m},{lat},{lon})[place~"^(city|town)$"];);out 200;'
+    )
+    elements = run_overpass(query) or []
+    scored: list[tuple[float, str]] = []
+    for el in elements:
+        name = (el.get("tags") or {}).get("name")
+        plat, plon = el.get("lat"), el.get("lon")
+        if name and plat is not None and plon is not None:
+            scored.append((geo.haversine_km(lat, lon, plat, plon), name))
+    scored.sort()
+    seen: set[str] = set()
+    names: list[str] = []
+    for _, name in scored:
+        key = name.lower()
+        if key not in seen:
+            seen.add(key)
+            names.append(name)
+    return names[:limit]
+
+
 def fetch_places(lat: float, lon: float, radius_km: float, limit: int = 120) -> list[Event]:
     """Return named permanent places within radius.
 
@@ -126,18 +168,7 @@ def fetch_places(lat: float, lon: float, radius_km: float, limit: int = 120) -> 
     wait to the fastest server instead of the sum of their timeouts.
     """
     radius_m = int(radius_km * 1000)
-    query = build_query(lat, lon, radius_m)
-    elements = None
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(OVERPASS_ENDPOINTS))
-    futures = [executor.submit(_query_one, ep, query) for ep in OVERPASS_ENDPOINTS]
-    try:
-        for fut in concurrent.futures.as_completed(futures):
-            res = fut.result()
-            if res is not None:
-                elements = res
-                break
-    finally:
-        executor.shutdown(wait=False)  # don't block on the losing mirrors
+    elements = run_overpass(build_query(lat, lon, radius_m))
     if elements is None:
         return []
 
