@@ -368,6 +368,11 @@ function fmtWhen(iso) {
   const d = new Date(iso); if (isNaN(d)) return iso;
   return d.toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
+function mapsUrl(ev) {
+  if (ev.lat != null && ev.lon != null)
+    return `https://www.google.com/maps/search/?api=1&query=${ev.lat}%2C${ev.lon}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.title)}`;
+}
 function activeFilters() { const on = new Set(); document.querySelectorAll(".tag-filter:checked").forEach((c) => on.add(c.value)); return on; }
 
 // ---- date range (dual slider, day offsets within the 2-week window) ----
@@ -418,7 +423,7 @@ function render() {
     card.innerHTML = `<div class="event-main">
       <h3 class="event-title"><a target="_blank" rel="noopener" href="${esc(ev.url || "#")}">${esc(ev.title)}</a></h3>
       <p class="event-meta"><span>${esc(ev.permanent ? `${ev.category || "Place"} · open any day` : fmtWhen(ev.start))}</span><span class="dot">·</span>
-        <span class="event-dist">${ev.distance_km} km away</span>${ev.locality ? `<span>· ${esc(ev.locality)}</span>` : ""}</p>
+        <a class="event-dist" target="_blank" rel="noopener" title="Open in Google Maps" href="${esc(mapsUrl(ev))}">${ev.distance_km} km away</a>${ev.locality ? `<span>· ${esc(ev.locality)}</span>` : ""}</p>
       ${ev.description ? `<p class="event-desc">${esc(ev.description)}</p>` : ""}
     </div><div class="event-tags"></div>`;
     const tagWrap = card.querySelector(".event-tags");

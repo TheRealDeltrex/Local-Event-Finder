@@ -24,6 +24,14 @@ function setStatus(msg, isError = false, busy = false) {
   statusEl.innerHTML = (busy ? '<span class="spinner"></span>' : "") + msg;
 }
 
+function mapsUrl(ev) {
+  // drop a pin at the venue; fall back to searching the name if no coords
+  if (ev.lat != null && ev.lon != null) {
+    return `https://www.google.com/maps/search/?api=1&query=${ev.lat}%2C${ev.lon}`;
+  }
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.title)}`;
+}
+
 function fmtWhen(iso) {
   if (!iso) return "Date TBC";
   const d = new Date(iso);
@@ -101,8 +109,13 @@ function render() {
     a.href = ev.url || "#";
     node.querySelector(".event-when").textContent =
       ev.permanent ? `${ev.category || "Place"} · open any day` : fmtWhen(ev.start);
-    node.querySelector(".event-dist").textContent =
-      ev.distance_km != null ? `${ev.distance_km} km away` : "";
+    const distEl = node.querySelector(".event-dist");
+    if (ev.distance_km != null) {
+      distEl.textContent = `${ev.distance_km} km away`;
+      distEl.href = mapsUrl(ev);
+    } else {
+      distEl.remove();
+    }
     node.querySelector(".event-where").textContent = ev.locality ? `· ${ev.locality}` : "";
     node.querySelector(".event-desc").textContent = ev.description || "";
 
