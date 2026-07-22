@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -219,24 +220,43 @@ fun AppScreen(vm: EventsViewModel, onUseLocation: () -> Unit) {
 @Composable
 private fun EventCard(ev: Event, onToggleTag: (String) -> Unit) {
     val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(14.dp)) {
+            // Title links to the event/place homepage.
             Text(
                 ev.title,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+                textDecoration = if (ev.url.isNotEmpty()) TextDecoration.Underline else null,
                 modifier = Modifier.clickableIf(ev.url.isNotEmpty()) {
                     runCatching { uriHandler.openUri(ev.url) }
                 },
             )
             Spacer(Modifier.height(4.dp))
-            val meta = buildString {
-                append(if (ev.permanent) "${ev.category.ifEmpty { "Place" }} · open any day" else formatWhen(ev.start))
-                ev.distanceKm?.let { append("  ·  ${it} km away") }
-                if (ev.locality.isNotEmpty()) append("  ·  ${ev.locality}")
+            val muted = MaterialTheme.colorScheme.onSurfaceVariant
+            val small = MaterialTheme.typography.bodySmall
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (ev.permanent) "${ev.category.ifEmpty { "Place" }} · open any day" else formatWhen(ev.start),
+                    style = small, color = muted,
+                )
+                ev.distanceKm?.let { km ->
+                    Text("  ·  ", style = small, color = muted)
+                    // Distance opens the location in Google Maps.
+                    Text(
+                        "$km km away",
+                        style = small,
+                        color = MaterialTheme.colorScheme.primary,
+                        textDecoration = TextDecoration.Underline,
+                        modifier = Modifier.clickable { openMaps(context, ev) },
+                    )
+                }
+                if (ev.locality.isNotEmpty()) {
+                    Text("  ·  ${ev.locality}", style = small, color = muted,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
-            Text(meta, style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary)
             if (ev.description.isNotEmpty()) {
                 Spacer(Modifier.height(6.dp))
                 Text(ev.description, style = MaterialTheme.typography.bodySmall,
@@ -272,6 +292,14 @@ private fun formatWhen(iso: String): String {
 
 private fun Modifier.clickableIf(enabled: Boolean, onClick: () -> Unit): Modifier =
     if (enabled) this.clickable(onClick = onClick) else this
+
+/** Open the event's location in Google Maps (by coordinates, else by name). */
+private fun openMaps(context: android.content.Context, ev: Event) {
+    val query = if (ev.lat != null && ev.lon != null) "${ev.lat},${ev.lon}"
+    else android.net.Uri.encode(ev.title)
+    val uri = android.net.Uri.parse("https://www.google.com/maps/search/?api=1&query=$query")
+    runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri)) }
+}
 
 /** Friendly label for the selected day window, e.g. "today → Sat, 2 Aug". */
 private fun dateRangeLabel(dayMin: Int, dayMax: Int): String {
