@@ -30,6 +30,7 @@ class Event:
     direction: str = ""        # 16-point compass bearing from the search origin
     permanent: bool = False    # a place you can visit anytime (no fixed date)
     category: str = ""         # e.g. "Museum", "Park" (mostly for permanent places)
+    hours: str = ""            # opening hours (OSM opening_hours, for permanent places)
     auto_tags: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)   # effective tags (auto + manual)
 

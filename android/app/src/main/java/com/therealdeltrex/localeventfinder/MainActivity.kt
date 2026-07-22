@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -159,7 +160,7 @@ fun AppScreen(vm: EventsViewModel, onUseLocation: () -> Unit) {
 
         // ---- tag filters ----
         Row(
-            Modifier.fillMaxWidth(),
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Tagging.ALL_TAGS.forEach { tag ->
@@ -173,6 +174,11 @@ fun AppScreen(vm: EventsViewModel, onUseLocation: () -> Unit) {
                 selected = UNTAGGED in state.filters,
                 onClick = { vm.toggleFilter(UNTAGGED, UNTAGGED !in state.filters) },
                 label = { Text("Untagged") },
+            )
+            FilterChip(
+                selected = PERMANENT in state.filters,
+                onClick = { vm.toggleFilter(PERMANENT, PERMANENT !in state.filters) },
+                label = { Text("Always-open") },
             )
         }
 
@@ -238,7 +244,8 @@ private fun EventCard(ev: Event, onToggleTag: (String) -> Unit) {
             val small = MaterialTheme.typography.bodySmall
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (ev.permanent) "${ev.category.ifEmpty { "Place" }} · open any day" else formatWhen(ev.start),
+                    if (ev.permanent) "${ev.category.ifEmpty { "Place" }} · open any day"
+                    else formatWhenRange(ev.start, ev.end),
                     style = small, color = muted,
                 )
                 ev.distanceKm?.let { km ->
@@ -257,7 +264,12 @@ private fun EventCard(ev: Event, onToggleTag: (String) -> Unit) {
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            if (ev.description.isNotEmpty()) {
+            if (ev.permanent && ev.hours.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Text("🕒 ${prettyHours(ev.hours)}", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+            } else if (!ev.permanent && ev.description.isNotEmpty()) {
                 Spacer(Modifier.height(6.dp))
                 Text(ev.description, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -289,6 +301,21 @@ private fun formatWhen(iso: String): String {
         dt.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT))
     }.getOrElse { iso }
 }
+
+/** Start time, plus the end time when it's known and on the same day. */
+private fun formatWhenRange(start: String, end: String): String {
+    val base = formatWhen(start)
+    if (end.isBlank()) return base
+    return runCatching {
+        val s = OffsetDateTime.parse(start)
+        val e = OffsetDateTime.parse(end)
+        if (!e.isAfter(s) || s.toLocalDate() != e.toLocalDate()) base
+        else base + " – " + e.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
+    }.getOrElse { base }
+}
+
+/** Lightly tidy an OSM opening_hours string for display. */
+private fun prettyHours(s: String): String = s.replace(Regex("\\s*;\\s*"), " · ").trim()
 
 private fun Modifier.clickableIf(enabled: Boolean, onClick: () -> Unit): Modifier =
     if (enabled) this.clickable(onClick = onClick) else this
