@@ -71,6 +71,7 @@ class Places(client: OkHttpClient) {
         "amenity|cinema" to ("Cinema" to listOf(Tagging.TAG_DATE)),
         "amenity|theatre" to ("Theatre" to listOf(Tagging.TAG_DATE)),
         "amenity|arts_centre" to ("Arts centre" to listOf(Tagging.TAG_DATE)),
+        "amenity|public_bath" to ("Swimming pool" to listOf(Tagging.TAG_FAMILY)),
         "historic|castle" to ("Castle" to listOf(Tagging.TAG_DATE)),
         "historic|monument" to ("Monument" to emptyList()),
         "historic|memorial" to ("Memorial" to emptyList()),
@@ -92,6 +93,13 @@ class Places(client: OkHttpClient) {
     }
 
     private fun categoryOf(tags: JSONObject): Pair<String, List<String>>? {
+        // Public pools are tagged inconsistently — label any of them "Swimming pool".
+        val sport = tags.optString("sport", "").lowercase()
+        val leisure = tags.optString("leisure", "")
+        if (sport.contains("swimming") || leisure == "swimming_pool" ||
+            leisure == "water_park" || tags.optString("amenity", "") == "public_bath") {
+            return "Swimming pool" to listOf(Tagging.TAG_FAMILY)
+        }
         for (key in keys) {
             val v = tags.optString(key, "")
             if (v.isNotEmpty()) cats["$key|$v"]?.let { return it }
@@ -159,7 +167,8 @@ class Places(client: OkHttpClient) {
             val center = el.optJSONObject("center")
             val plat = if (el.has("lat")) el.optDouble("lat") else center?.optDouble("lat") ?: continue
             val plon = if (el.has("lon")) el.optDouble("lon") else center?.optDouble("lon") ?: continue
-            val key = "${name.lowercase()}|${cat.first}"
+            // dedupe by name + coarse location (~1 km) so a twice-mapped place collapses
+            val key = "${name.lowercase()}|${"%.2f".format(plat)}|${"%.2f".format(plon)}"
             if (!seen.add(key)) continue
             val osmUrl = "https://www.openstreetmap.org/${el.optString("type")}/${el.optString("id")}"
             val website = tags.optString("website").ifEmpty {
@@ -174,6 +183,7 @@ class Places(client: OkHttpClient) {
                     description = cat.first,
                     permanent = true,
                     category = cat.first,
+                    hours = tags.optString("opening_hours", ""),
                     locality = tags.optString("addr:city", ""),
                     lat = plat,
                     lon = plon,

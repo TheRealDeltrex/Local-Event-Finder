@@ -20,6 +20,7 @@ data class Event(
     var direction: String = "",       // 16-point compass bearing from the search origin
     val permanent: Boolean = false,   // a place you can visit any day
     val category: String = "",        // e.g. "Museum", "Park"
+    val hours: String = "",           // opening hours (OSM opening_hours, permanent places)
     val autoTags: Set<String> = emptySet(),
     var tags: Set<String> = emptySet(),
 )
