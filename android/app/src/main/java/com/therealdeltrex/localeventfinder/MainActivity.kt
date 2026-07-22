@@ -148,15 +148,24 @@ fun AppScreen(vm: EventsViewModel, onUseLocation: () -> Unit) {
         )
 
         // ---- date window (drag both ends) ----
-        Text("When: ${dateRangeLabel(state.dayMin, state.dayMax)}",
+        Text("When: ${dateRangeLabel(state.dayMin, state.dayMax, state.viewWindowDays)}",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium)
         RangeSlider(
             value = state.dayMin.toFloat()..state.dayMax.toFloat(),
             onValueChange = { r -> vm.setDayRange(r.start.toInt(), r.endInclusive.toInt()) },
-            valueRange = 0f..WINDOW_DAYS.toFloat(),
+            valueRange = 0f..state.viewWindowDays.toFloat(),
             steps = 0,  // continuous; day precision comes from toInt()
         )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(
+                checked = state.viewWindowDays >= 365,
+                onCheckedChange = { vm.setExtended(it) },
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("Show up to 1 year ahead", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
 
         // ---- tag filters ----
         Row(
@@ -191,6 +200,12 @@ fun AppScreen(vm: EventsViewModel, onUseLocation: () -> Unit) {
             Text(state.status, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Text(
+            "⏳ A search can take up to a minute — it checks several event sources and OpenStreetMap.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
 
         Spacer(Modifier.height(12.dp))
 
@@ -329,8 +344,10 @@ private fun openMaps(context: android.content.Context, ev: Event) {
 }
 
 /** Friendly label for the selected day window, e.g. "today → Sat, 2 Aug". */
-private fun dateRangeLabel(dayMin: Int, dayMax: Int): String {
-    if (dayMin <= 0 && dayMax >= WINDOW_DAYS) return "next 12 months"
+private fun dateRangeLabel(dayMin: Int, dayMax: Int, viewWindowDays: Int): String {
+    if (dayMin <= 0 && dayMax >= viewWindowDays) {
+        return if (viewWindowDays >= 365) "next 12 months" else "next 2 weeks"
+    }
     fun lbl(off: Int): String = when {
         off <= 0 -> "today"
         off == 1 -> "tomorrow"

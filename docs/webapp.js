@@ -273,7 +273,8 @@ async function fetchPlaces(lat, lon, rangeKm) {
   out.sort((a, b) => haversine(lat, lon, a.lat, a.lon) - haversine(lat, lon, b.lat, b.lon));
   return out.slice(0, 120);
 }
-const WINDOW_DAYS = 365;
+const WINDOW_DAYS = 365;           // events are kept for a year…
+let viewWindow = 14;               // …but the slider views two weeks by default
 function withinWindow(startISO) {
   if (!startISO) return null;
   const t = Date.parse(startISO); if (isNaN(t)) return null;
@@ -421,10 +422,21 @@ function dayBounds() {
 }
 function updateDateUI() {
   const [lo, hi] = dayBounds(), fill = el("#date-fill");
-  fill.style.left = (lo / WINDOW_DAYS) * 100 + "%";
-  fill.style.width = ((hi - lo) / WINDOW_DAYS) * 100 + "%";
+  fill.style.left = (lo / viewWindow) * 100 + "%";
+  fill.style.width = ((hi - lo) / viewWindow) * 100 + "%";
   el("#date-label").textContent =
-    lo === 0 && hi === WINDOW_DAYS ? "next 12 months" : `${labelForDay(lo)} → ${labelForDay(hi)}`;
+    lo === 0 && hi === viewWindow
+      ? (viewWindow >= 365 ? "next 12 months" : "next 2 weeks")
+      : `${labelForDay(lo)} → ${labelForDay(hi)}`;
+}
+// Switch the date-slider span between 2 weeks and a year (client-side only).
+function setViewWindow(days) {
+  viewWindow = days;
+  const mn = el("#day-min"), mx = el("#day-max");
+  mn.max = String(days); mx.max = String(days);
+  mn.value = "0"; mx.value = String(days);
+  updateDateUI();
+  render();
 }
 function inDateRange(ev) {
   if (ev.permanent) return true;
@@ -534,5 +546,7 @@ function onDaySlide(e) {
 }
 el("#day-min").addEventListener("input", onDaySlide);
 el("#day-max").addEventListener("input", onDaySlide);
-updateDateUI();
+const extendEl = el("#extend-year");
+if (extendEl) extendEl.addEventListener("change", () => setViewWindow(extendEl.checked ? 365 : 14));
+setViewWindow(14);   // default to a two-week view
 setStatus("Share your location or type a place to start.");

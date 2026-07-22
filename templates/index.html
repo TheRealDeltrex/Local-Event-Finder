@@ -31,13 +31,17 @@
       </div>
 
       <div class="range-row">
-        <label>When: <strong id="date-label">next 12 months</strong></label>
+        <label>When: <strong id="date-label">next 2 weeks</strong></label>
         <div class="dual" id="date-dual">
           <div class="dual-track"></div>
           <div class="dual-fill" id="date-fill"></div>
-          <input id="day-min" type="range" min="0" max="365" value="0" step="1" aria-label="Earliest day" />
-          <input id="day-max" type="range" min="0" max="365" value="365" step="1" aria-label="Latest day" />
+          <input id="day-min" type="range" min="0" max="14" value="0" step="1" aria-label="Earliest day" />
+          <input id="day-max" type="range" min="0" max="14" value="14" step="1" aria-label="Latest day" />
         </div>
+        <label class="chip-toggle" style="margin-top:.5rem" title="Also show events up to a year ahead">
+          <input type="checkbox" id="extend-year" />
+          <span>Show up to 1 year ahead</span>
+        </label>
       </div>
 
       <div class="filter-row">
@@ -59,6 +63,9 @@
       </div>
 
       <p id="status" class="status" role="status"></p>
+      <p class="muted small" style="margin:.3rem 0 0">
+        ⏳ A search can take up to a minute — it checks several event sources and OpenStreetMap.
+      </p>
     </section>
 
     <section id="results" class="results" aria-live="polite"></section>
