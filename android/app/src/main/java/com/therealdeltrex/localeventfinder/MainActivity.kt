@@ -245,7 +245,7 @@ private fun EventCard(ev: Event, onToggleTag: (String) -> Unit) {
                     Text("  ·  ", style = small, color = muted)
                     // Distance opens the location in Google Maps.
                     Text(
-                        "$km km away",
+                        "$km km" + if (ev.direction.isNotEmpty()) " ${ev.direction}" else "",
                         style = small,
                         color = MaterialTheme.colorScheme.primary,
                         textDecoration = TextDecoration.Underline,

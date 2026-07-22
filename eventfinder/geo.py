@@ -160,3 +160,19 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     dl = math.radians(lon2 - lon1)
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
     return 2 * r * math.asin(math.sqrt(a))
+
+
+_COMPASS_16 = [
+    "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+    "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
+]
+
+
+def compass16(lat1: float, lon1: float, lat2: float, lon2: float) -> str:
+    """16-point compass direction from point 1 to point 2 (e.g. "NNE")."""
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dl = math.radians(lon2 - lon1)
+    y = math.sin(dl) * math.cos(p2)
+    x = math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dl)
+    bearing = (math.degrees(math.atan2(y, x)) + 360) % 360
+    return _COMPASS_16[round(bearing / 22.5) % 16]
