@@ -52,6 +52,7 @@ CATEGORIES: dict[tuple[str, str], tuple[str, list[str]]] = {
     ("amenity", "cinema"): ("Cinema", ["date"]),
     ("amenity", "theatre"): ("Theatre", ["date"]),
     ("amenity", "arts_centre"): ("Arts centre", ["date"]),
+    ("amenity", "public_bath"): ("Swimming pool", ["family"]),
     ("historic", "castle"): ("Castle", ["date"]),
     ("historic", "monument"): ("Monument", []),
     ("historic", "memorial"): ("Memorial", []),
@@ -85,6 +86,16 @@ def build_query(lat: float, lon: float, radius_m: int) -> str:
 
 
 def _category_of(tags: dict) -> Optional[tuple[str, list[str]]]:
+    # Public swimming pools are mapped inconsistently (leisure=swimming_pool,
+    # water_park, or sports_centre+sport=swimming, amenity=public_bath). Detect
+    # any of them and label clearly as "Swimming pool".
+    sport = (tags.get("sport") or "").lower()
+    if (
+        "swimming" in sport
+        or tags.get("leisure") in ("swimming_pool", "water_park")
+        or tags.get("amenity") == "public_bath"
+    ):
+        return ("Swimming pool", ["family"])
     for key in _KEYS:
         val = tags.get(key)
         if val and (key, val) in CATEGORIES:
@@ -145,7 +156,9 @@ def fetch_places(lat: float, lon: float, radius_km: float, limit: int = 120) -> 
         plon = el.get("lon") or (el.get("center") or {}).get("lon")
         if plat is None or plon is None:
             continue
-        key = f"{name.lower()}|{label}"
+        # Dedupe by name + coarse location (~1 km) so a facility mapped twice
+        # (e.g. the pool basin and the building) collapses into one result.
+        key = f"{name.lower()}|{round(float(plat), 2)}|{round(float(plon), 2)}"
         if key in seen:
             continue
         seen.add(key)
@@ -157,12 +170,13 @@ def fetch_places(lat: float, lon: float, radius_km: float, limit: int = 120) -> 
                 title=name,
                 url=website,
                 source="OpenStreetMap",
-                description=label + (f" · {tags['tourism']}" if tags.get("tourism") else ""),
+                description=label,
                 permanent=True,
                 category=label,
                 locality=tags.get("addr:city", ""),
                 lat=float(plat),
                 lon=float(plon),
+                hours=tags.get("opening_hours", ""),
                 auto_tags=list(cat_tags),
             )
         )
