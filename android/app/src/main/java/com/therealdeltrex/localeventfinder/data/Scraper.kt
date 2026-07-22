@@ -50,36 +50,66 @@ class Scraper(private val client: OkHttpClient, private val geo: Geo) {
         java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFKD)
             .replace(Regex("\\p{M}+"), "")
 
-    private fun citySlugCandidates(place: Place): List<String> {
-        val names = listOf(place.cityLocal, place.city).filter { it.isNotBlank() }
-            .ifEmpty { listOf(place.label.substringBefore(",")) }
+    private fun nameToSlugs(name: String): List<String> {
+        val base = name.trim().lowercase().replace(" ", "-")
         val out = LinkedHashSet<String>()
-        for (n in names) {
-            val base = n.trim().lowercase().replace(" ", "-")
-            if (base.isNotEmpty()) out.add(base)
-            val ascii = stripDiacritics(base)
-            if (ascii.isNotEmpty()) out.add(ascii)
-        }
+        if (base.isNotEmpty()) out.add(base)
+        val ascii = stripDiacritics(base)
+        if (ascii.isNotEmpty()) out.add(ascii)
         return out.toList()
     }
 
-    /** Pick the AllEvents slug whose /all events are near the origin; return it
-     *  with the fetched page so it can be reused. */
-    private suspend fun resolveAllEventsSlug(place: Place, rangeKm: Double): Pair<String?, String?> {
-        var first: Pair<String?, String?> = null to null
-        for (slug in citySlugCandidates(place)) {
-            val enc = java.net.URLEncoder.encode(slug, "UTF-8")
-            val html = fetch("https://allevents.in/$enc/all")
-            if (first.first == null) first = slug to html
-            if (html == null) continue
-            val events = extractEvents(html, "AllEvents")
-            if (events.any {
-                    it.lat != null && Geo.haversineKm(place.lat, place.lon, it.lat!!, it.lon!!) <= rangeKm
-                }) {
-                return slug to html
+    private data class LocalityAll(val slug: String?, val html: String?, val near: Int)
+
+    /** Try slug variants of a place name against AllEvents /all. */
+    private suspend fun fetchAllEventsAll(
+        name: String, olat: Double, olon: Double, rangeKm: Double,
+    ): LocalityAll {
+        var best = LocalityAll(null, null, 0)
+        for (slug in nameToSlugs(name)) {
+            val html = fetch("https://allevents.in/${java.net.URLEncoder.encode(slug, "UTF-8")}/all")
+                ?: continue
+            val near = extractEvents(html, "AllEvents").count {
+                it.lat != null && Geo.haversineKm(olat, olon, it.lat!!, it.lon!!) <= rangeKm
+            }
+            if (near > 0) return LocalityAll(slug, html, near)
+            if (best.html == null) best = LocalityAll(slug, html, near)
+        }
+        return best
+    }
+
+    /** Collect AllEvents listings for the origin city AND nearby towns within
+     *  the radius, so a remote location still finds events nearby. */
+    private suspend fun gatherAllEvents(
+        place: Place, olat: Double, olon: Double, rangeKm: Double, log: MutableList<String>,
+    ): List<Event> {
+        val names = LinkedHashSet<String>()
+        for (n in listOf(place.cityLocal, place.city)) if (n.isNotBlank()) names.add(n)
+        // A town centre can sit just outside the range while its events fall in.
+        for (n in places.nearbyLocalities(olat, olon, rangeKm + 20)) names.add(n)
+
+        val out = ArrayList<Event>()
+        val seen = HashSet<String>()
+        val scored = ArrayList<Triple<Int, String, String>>()  // near, slug, name
+        fun add(events: List<Event>) { for (e in events) if (seen.add(e.id)) out.add(e) }
+
+        for (name in names.take(8)) {
+            val r = fetchAllEventsAll(name, olat, olon, rangeKm)
+            if (r.html == null) continue
+            add(extractEvents(r.html, "AllEvents ($name)"))
+            if (r.near > 0 && r.slug != null) {
+                scored.add(Triple(r.near, r.slug, name))
+                log.add("AllEvents · $name: ${r.near} nearby event(s)")
             }
         }
-        return first
+        scored.sortByDescending { it.first }
+        scored.take(1).forEach { (_, slug, name) ->
+            for (cat in listOf("music", "theatre", "comedy", "arts", "nightlife")) {
+                val html = fetch("https://allevents.in/${java.net.URLEncoder.encode(slug, "UTF-8")}/$cat")
+                if (html != null) add(extractEvents(html, "AllEvents ($name/$cat)"))
+            }
+        }
+        return out
     }
 
     // ---- JSON-LD extraction ---------------------------------------------
@@ -215,26 +245,12 @@ class Scraper(private val client: OkHttpClient, private val geo: Geo) {
         includePlaces: Boolean = true,
     ): List<Event> {
         val enabled = sources.filter { it.enabled }
-        // City names localize badly (Nominatim gives "Hanover", AllEvents wants
-        // "hannover"); pick the slug whose /all events are actually near, reusing
-        // the winning page.
-        var aeSlug: String? = null
-        var aeAllHtml: String? = null
-        if (enabled.any { it.url.contains("allevents.in") }) {
-            val resolved = resolveAllEventsSlug(place, rangeKm)
-            aeSlug = resolved.first
-            aeAllHtml = resolved.second
-            if (aeSlug != null) log.add("AllEvents city slug: $aeSlug")
-        }
-
         val collected = LinkedHashMap<String, Event>()
+
+        // Non-AllEvents sources (e.g. Meetup) — queried by the origin city.
         for (src in enabled) {
-            val isAllEvents = src.url.contains("allevents.in")
-            val html = if (isAllEvents && src.url.endsWith("/all") && aeAllHtml != null) {
-                aeAllHtml
-            } else {
-                fetch(Sources.buildUrl(src.url, place, if (isAllEvents) aeSlug else null))
-            }
+            if (src.url.contains("allevents.in")) continue
+            val html = fetch(Sources.buildUrl(src.url, place))
             if (html == null) {
                 log.add("${src.name}: could not fetch")
                 continue
@@ -242,6 +258,13 @@ class Scraper(private val client: OkHttpClient, private val geo: Geo) {
             val found = extractEvents(html, src.name)
             log.add("${src.name}: ${found.size} event(s) with structured data")
             for (ev in found) collected.putIfAbsent(ev.id, ev)
+        }
+
+        // AllEvents: origin city AND nearby towns within the radius.
+        if (enabled.any { it.url.contains("allevents.in") }) {
+            for (ev in gatherAllEvents(place, place.lat, place.lon, rangeKm, log)) {
+                collected.putIfAbsent(ev.id, ev)
+            }
         }
 
         val now = Instant.now()

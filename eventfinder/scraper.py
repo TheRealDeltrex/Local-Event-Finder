@@ -21,7 +21,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from . import geo, tagging
-from .places import fetch_places
+from .places import fetch_places, nearby_localities
 from .models import Event, event_id
 
 BROWSER_UA = (
@@ -184,26 +184,80 @@ def city_slug_candidates(place: dict) -> list[str]:
     return out
 
 
-def resolve_allevents_slug(
-    place: dict, origin_lat: float, origin_lon: float, range_km: float
-) -> tuple[Optional[str], Optional[str]]:
-    """Pick the AllEvents city slug whose /all events are actually near the
-    origin. Returns (slug, cached_all_html) so the winning page can be reused."""
-    first: tuple[Optional[str], Optional[str]] = (None, None)
-    for slug in city_slug_candidates(place):
+def _name_to_slugs(name: str) -> list[str]:
+    base = name.strip().lower().replace(" ", "-")
+    out: list[str] = []
+    for slug in (base, _strip_diacritics(base)):
+        if slug and slug not in out:
+            out.append(slug)
+    return out
+
+
+def _fetch_allevents_all(
+    name: str, origin_lat: float, origin_lon: float, range_km: float
+) -> tuple[Optional[str], Optional[str], int]:
+    """Try slug variants of a place name against AllEvents /all; return
+    (slug, html, near_event_count) for the best match, else (None, None, 0)."""
+    best: tuple[Optional[str], Optional[str], int] = (None, None, 0)
+    for slug in _name_to_slugs(name):
         html = fetch(f"https://allevents.in/{quote(slug)}/all")
-        if first[0] is None:
-            first = (slug, html)
-        if not html:
+        if html is None:
             continue
-        events = extract_events(html, "AllEvents")
-        if any(
-            e.lat is not None
+        near = sum(
+            1 for e in extract_events(html, "AllEvents")
+            if e.lat is not None
             and geo.haversine_km(origin_lat, origin_lon, e.lat, e.lon) <= range_km
-            for e in events
-        ):
-            return slug, html
-    return first
+        )
+        if near > 0:
+            return slug, html, near
+        if best[1] is None:
+            best = (slug, html, near)
+    return best
+
+
+def gather_allevents(
+    place: dict, origin_lat: float, origin_lon: float, range_km: float, log: list
+) -> list[Event]:
+    """Collect AllEvents listings for the origin city AND nearby towns within
+    the radius — so a remote location still finds events in neighbouring places.
+    Deepens coverage (theatre/comedy/…) for the best-yielding localities."""
+    names: list[str] = []
+    for n in (place.get("city_local"), place.get("city")):
+        if n and n.lower() not in {x.lower() for x in names}:
+            names.append(n)
+    # Search a bit beyond the range: a town centre can sit just outside it while
+    # its venues/events fall inside (events are distance-filtered downstream).
+    for n in nearby_localities(origin_lat, origin_lon, range_km + 20):
+        if n.lower() not in {x.lower() for x in names}:
+            names.append(n)
+    names = names[:8]
+
+    out: list[Event] = []
+    seen: set[str] = set()
+    scored: list[tuple[int, str, str]] = []  # (near_count, slug, name)
+
+    def add(events: list[Event]) -> None:
+        for e in events:
+            if e.id not in seen:
+                seen.add(e.id)
+                out.append(e)
+
+    for name in names:
+        slug, html, near = _fetch_allevents_all(name, origin_lat, origin_lon, range_km)
+        if html is None:
+            continue
+        add(extract_events(html, f"AllEvents ({name})"))
+        if near > 0:
+            scored.append((near, slug, name))
+            log.append(f"AllEvents · {name}: {near} nearby event(s)")
+
+    scored.sort(reverse=True)
+    for _near, slug, name in scored[:1]:  # deepen the single best locality
+        for cat in ("music", "theatre", "comedy", "arts", "nightlife"):
+            html = fetch(f"https://allevents.in/{quote(slug)}/{cat}")
+            if html is not None:
+                add(extract_events(html, f"AllEvents ({name}/{cat})"))
+    return out
 
 
 def fetch(url: str) -> Optional[str]:
@@ -276,36 +330,26 @@ def run_search(
     origin_lat, origin_lon = place["lat"], place["lon"]
     now = datetime.now(timezone.utc)
 
-    # Work out which AllEvents city slug actually returns local events (city
-    # names localize inconsistently), reusing the winning /all page.
     enabled = [s for s in sources if s.get("enabled", True)]
-    has_allevents = any("allevents.in" in s.get("url", "") for s in enabled)
-    ae_slug: Optional[str] = None
-    ae_all_html: Optional[str] = None
-    if has_allevents:
-        ae_slug, ae_all_html = resolve_allevents_slug(place, origin_lat, origin_lon, range_km)
-        if ae_slug:
-            log.append(f"AllEvents city slug: {ae_slug}")
-
-    # Fetch sources sequentially: AllEvents returns a degraded, IP-geolocated
-    # response when hit with concurrent requests, so we must not parallelize.
     collected: dict[str, Event] = {}
+
+    # Non-AllEvents sources (e.g. Meetup) — queried by the origin city.
     for src in enabled:
-        is_allevents = "allevents.in" in src.get("url", "")
-        # Reuse the /all page we already fetched while picking the slug.
-        if is_allevents and src["url"].endswith("/all") and ae_all_html is not None:
-            html = ae_all_html
-        else:
-            url = build_source_url(
-                src["url"], place, city_lower_override=ae_slug if is_allevents else None
-            )
-            html = fetch(url)
+        if "allevents.in" in src.get("url", ""):
+            continue
+        html = fetch(build_source_url(src["url"], place))
         if html is None:
             log.append(f"{src['name']}: could not fetch")
             continue
         found = extract_events(html, src["name"])
         log.append(f"{src['name']}: {len(found)} event(s) with structured data")
         for ev in found:
+            collected.setdefault(ev.id, ev)
+
+    # AllEvents: query the origin city AND nearby towns within the radius, so a
+    # remote location still finds events in neighbouring places.
+    if any("allevents.in" in s.get("url", "") for s in enabled):
+        for ev in gather_allevents(place, origin_lat, origin_lon, range_km, log):
             collected.setdefault(ev.id, ev)
 
     results: list[Event] = []

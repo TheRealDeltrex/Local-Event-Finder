@@ -153,6 +153,25 @@ class Places(client: OkHttpClient) {
         result
     }
 
+    /** Nearest named towns/cities within the radius (for querying event sites). */
+    suspend fun nearbyLocalities(lat: Double, lon: Double, radiusKm: Double, limit: Int = 8): List<String> {
+        val radiusM = (radiusKm * 1000).toInt()
+        val q = "[out:json][timeout:40];(node(around:$radiusM,$lat,$lon)[place~\"^(city|town)$\"];);out 200;"
+        val elements = race(q) ?: return emptyList()
+        val scored = ArrayList<Pair<Double, String>>()
+        for (i in 0 until elements.length()) {
+            val el = elements.optJSONObject(i) ?: continue
+            val name = el.optJSONObject("tags")?.optString("name", "").orEmpty()
+            if (name.isEmpty() || !el.has("lat") || !el.has("lon")) continue
+            scored.add(Geo.haversineKm(lat, lon, el.optDouble("lat"), el.optDouble("lon")) to name)
+        }
+        scored.sortBy { it.first }
+        val seen = HashSet<String>()
+        val names = ArrayList<String>()
+        for ((_, n) in scored) if (seen.add(n.lowercase())) names.add(n)
+        return names.take(limit)
+    }
+
     suspend fun fetch(lat: Double, lon: Double, radiusKm: Double, limit: Int = 120): List<Event> {
         val elements = race(query(lat, lon, (radiusKm * 1000).toInt())) ?: return emptyList()
 
