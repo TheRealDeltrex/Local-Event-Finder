@@ -13,7 +13,7 @@ const dayMinEl = el("#day-min");
 const dayMaxEl = el("#day-max");
 const dateFillEl = el("#date-fill");
 const dateLabelEl = el("#date-label");
-const WINDOW_DAYS = 14;
+const WINDOW_DAYS = 365;
 
 let allEvents = [];      // everything the last search returned
 let lastSearchRange = 40;
@@ -80,7 +80,7 @@ function updateDateUI() {
   dateFillEl.style.left = (lo / WINDOW_DAYS) * 100 + "%";
   dateFillEl.style.width = ((hi - lo) / WINDOW_DAYS) * 100 + "%";
   dateLabelEl.textContent =
-    lo === 0 && hi === WINDOW_DAYS ? "next 2 weeks" : `${labelForDay(lo)} → ${labelForDay(hi)}`;
+    lo === 0 && hi === WINDOW_DAYS ? "next 12 months" : `${labelForDay(lo)} → ${labelForDay(hi)}`;
 }
 function inDateRange(ev) {
   if (ev.permanent) return true;          // any-day places always qualify

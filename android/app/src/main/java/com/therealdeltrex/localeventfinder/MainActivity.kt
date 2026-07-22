@@ -155,7 +155,7 @@ fun AppScreen(vm: EventsViewModel, onUseLocation: () -> Unit) {
             value = state.dayMin.toFloat()..state.dayMax.toFloat(),
             onValueChange = { r -> vm.setDayRange(r.start.toInt(), r.endInclusive.toInt()) },
             valueRange = 0f..WINDOW_DAYS.toFloat(),
-            steps = WINDOW_DAYS - 1,
+            steps = 0,  // continuous; day precision comes from toInt()
         )
 
         // ---- tag filters ----
@@ -330,7 +330,7 @@ private fun openMaps(context: android.content.Context, ev: Event) {
 
 /** Friendly label for the selected day window, e.g. "today → Sat, 2 Aug". */
 private fun dateRangeLabel(dayMin: Int, dayMax: Int): String {
-    if (dayMin <= 0 && dayMax >= WINDOW_DAYS) return "next 2 weeks"
+    if (dayMin <= 0 && dayMax >= WINDOW_DAYS) return "next 12 months"
     fun lbl(off: Int): String = when {
         off <= 0 -> "today"
         off == 1 -> "tomorrow"
