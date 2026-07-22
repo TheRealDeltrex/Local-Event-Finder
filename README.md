@@ -1,5 +1,11 @@
 # 📍 Local Events Finder
 
+### 🌐 [**Open the web app & download the Android app →**](https://therealdeltrex.github.io/Local-Event-Finder/)
+
+_Live at **https://therealdeltrex.github.io/Local-Event-Finder/** — run it in your browser or grab the signed APK._
+
+---
+
 Find things to do near you. Point it at your area, set a range (up to 40 km),
 and browse local events — each one tagged as a **possible date** or **family
 friendly**, and filterable by tag and distance.
@@ -12,11 +18,10 @@ coordinates. Your searches and your tag choices stay in local files.
 > [`android/`](android/) with the same features (device GPS, scraping, tagging,
 > filtering). See [android/README.md](android/README.md) to build it.
 >
-> **🌐 Landing page + APK download:** [`docs/`](docs/) is a GitHub Pages site
-> that runs the web version in the browser and offers the signed Android APK
-> ([`docs/LocalEventFinder.apk`](docs/LocalEventFinder.apk)). Enable it under
-> **Settings → Pages → Deploy from branch → `main` / `/docs`**; it will then be
-> live at `https://therealdeltrex.github.io/Local-Event-Finder/`.
+> **🌐 Landing page + APK download:** the [**live site**](https://therealdeltrex.github.io/Local-Event-Finder/)
+> (served from [`docs/`](docs/) via GitHub Pages) runs the web version in the
+> browser and offers the signed Android APK
+> ([`docs/LocalEventFinder.apk`](docs/LocalEventFinder.apk)).
 
 ## What it does
 
