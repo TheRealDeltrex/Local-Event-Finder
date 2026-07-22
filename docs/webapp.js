@@ -170,7 +170,7 @@ function extractEvents(html, sourceName) {
       if (seen.has(id)) continue; seen.add(id);
       const lf = locFields(node), description = txt(node.description);
       out.push({ id, title, url, source: sourceName, description, start,
-        image: txt(node.image), address: lf.address, locality: lf.locality,
+        end: txt(node.endDate), image: txt(node.image), address: lf.address, locality: lf.locality,
         lat: lf.lat, lon: lf.lon, autoTags: autoTags(title, description), tags: [] });
     }
   });
@@ -210,7 +210,7 @@ const POI_CATS = {
   "leisure|bathing_place": ["Bathing spot", ["family"]], "leisure|horse_riding": ["Horse riding", ["family"]],
   "leisure|playground": ["Playground", ["family"]], "leisure|bird_hide": ["Bird hide", ["date"]],
   "amenity|cinema": ["Cinema", ["date"]], "amenity|theatre": ["Theatre", ["date"]],
-  "amenity|arts_centre": ["Arts centre", ["date"]],
+  "amenity|arts_centre": ["Arts centre", ["date"]], "amenity|public_bath": ["Swimming pool", ["family"]],
   "historic|castle": ["Castle", ["date"]], "historic|monument": ["Monument", []],
   "historic|memorial": ["Memorial", []], "historic|ruins": ["Ruins", ["date"]],
   "natural|beach": ["Beach", ["family"]],
@@ -225,6 +225,12 @@ function overpassQuery(lat, lon, r) {
   return `[out:json][timeout:60];(${body})->.a;node.a;out 300;way.a;out center 300;relation.a;out center 100;`;
 }
 function catOf(tags) {
+  // Public pools are tagged inconsistently — label any of them "Swimming pool".
+  const sport = (tags.sport || "").toLowerCase();
+  if (sport.includes("swimming") || tags.leisure === "swimming_pool" ||
+      tags.leisure === "water_park" || tags.amenity === "public_bath") {
+    return ["Swimming pool", ["family"]];
+  }
   for (const key of POI_KEYS) {
     const v = tags[key]; if (v && POI_CATS[`${key}|${v}`]) return POI_CATS[`${key}|${v}`];
   }
@@ -255,10 +261,12 @@ async function fetchPlaces(lat, lon, rangeKm) {
     const cat = catOf(tags); if (!cat) continue;
     const plat = el.lat ?? el.center?.lat, plon = el.lon ?? el.center?.lon;
     if (plat == null || plon == null) continue;
-    const key = `${name.toLowerCase()}|${cat[0]}`; if (seen.has(key)) continue; seen.add(key);
+    // dedupe by name + coarse location (~1 km) so a twice-mapped place collapses
+    const key = `${name.toLowerCase()}|${(+plat).toFixed(2)}|${(+plon).toFixed(2)}`;
+    if (seen.has(key)) continue; seen.add(key);
     const url = tags.website || tags["contact:website"] || `https://www.openstreetmap.org/${el.type}/${el.id}`;
     out.push({ id: "poi-" + el.type + "-" + el.id, title: name, url, source: "OpenStreetMap",
-      description: cat[0], permanent: true, category: cat[0], start: "",
+      description: cat[0], permanent: true, category: cat[0], start: "", hours: tags.opening_hours || "",
       locality: tags["addr:city"] || "", lat: +plat, lon: +plon, autoTags: [...cat[1]], tags: [] });
   }
   // nearest first, then cap — so a close area is never truncated away
@@ -378,6 +386,15 @@ function fmtWhen(iso) {
   const d = new Date(iso); if (isNaN(d)) return iso;
   return d.toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
+function fmtWhenRange(start, end) {
+  const base = fmtWhen(start);
+  if (!end) return base;
+  const s = new Date(start), e = new Date(end);
+  if (isNaN(s) || isNaN(e) || e <= s) return base;
+  if (s.toDateString() !== e.toDateString()) return base;
+  return `${base} – ${e.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
+}
+function prettyHours(s) { return String(s).replace(/\s*;\s*/g, " · ").trim(); }
 function mapsUrl(ev) {
   if (ev.lat != null && ev.lon != null)
     return `https://www.google.com/maps/search/?api=1&query=${ev.lat}%2C${ev.lon}`;
@@ -423,6 +440,7 @@ function render() {
   const shown = allEvents.filter((ev) => {
     if (ev.distance_km != null && ev.distance_km > maxR) return false;
     if (!inDateRange(ev)) return false;
+    if (ev.permanent && !filters.has("__permanent__")) return false;
     if (!ev.tags.length) return filters.has("__untagged__");
     return ev.tags.some((t) => filters.has(t));
   });
@@ -430,11 +448,15 @@ function render() {
   if (!shown.length) { box.innerHTML = '<p class="empty">Nothing matches these filters. Widen the distance or date range, or turn on more tags.</p>'; return; }
   for (const ev of shown) {
     const card = document.createElement("article"); card.className = "card event";
+    const whenText = ev.permanent
+      ? `${ev.category || "Place"} · ${ev.hours ? prettyHours(ev.hours) : "open any day"}`
+      : fmtWhenRange(ev.start, ev.end);
+    const descText = ev.permanent ? "" : (ev.description || "");
     card.innerHTML = `<div class="event-main">
       <h3 class="event-title"><a target="_blank" rel="noopener" href="${esc(ev.url || "#")}">${esc(ev.title)}</a></h3>
-      <p class="event-meta"><span>${esc(ev.permanent ? `${ev.category || "Place"} · open any day` : fmtWhen(ev.start))}</span><span class="dot">·</span>
+      <p class="event-meta"><span>${esc(whenText)}</span><span class="dot">·</span>
         <a class="event-dist" target="_blank" rel="noopener" title="Open in Google Maps" href="${esc(mapsUrl(ev))}">${ev.distance_km} km${ev.direction ? " " + esc(ev.direction) : ""}</a>${ev.locality ? `<span>· ${esc(ev.locality)}</span>` : ""}</p>
-      ${ev.description ? `<p class="event-desc">${esc(ev.description)}</p>` : ""}
+      ${descText ? `<p class="event-desc">${esc(descText)}</p>` : ""}
     </div><div class="event-tags"></div>`;
     const tagWrap = card.querySelector(".event-tags");
     for (const tag of TAGS) {

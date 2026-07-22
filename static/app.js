@@ -39,6 +39,20 @@ function fmtWhen(iso) {
   const opts = { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };
   return d.toLocaleString(undefined, opts);
 }
+// "Sat, 2 Aug, 19:00 – 22:00" when an end time on the same day is known.
+function fmtWhenRange(start, end) {
+  const base = fmtWhen(start);
+  if (!end) return base;
+  const s = new Date(start), e = new Date(end);
+  if (isNaN(s) || isNaN(e) || e <= s) return base;
+  const sameDay = s.toDateString() === e.toDateString();
+  const t = (d) => d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return sameDay ? `${base} – ${t(e)}` : base;
+}
+// Lightly tidy an OSM opening_hours string for display.
+function prettyHours(s) {
+  return String(s).replace(/\s*;\s*/g, " · ").trim();
+}
 
 function activeTagFilters() {
   const on = new Set();
@@ -81,6 +95,8 @@ function inDateRange(ev) {
 function passesFilter(ev, filters, maxRange) {
   if (ev.distance_km != null && ev.distance_km > maxRange) return false;
   if (!inDateRange(ev)) return false;
+  // "Always-open" places can be filtered out entirely.
+  if (ev.permanent && !filters.has("__permanent__")) return false;
   const tags = ev.tags || [];
   if (tags.length === 0) return filters.has("__untagged__");
   return tags.some((t) => filters.has(t));
@@ -107,8 +123,9 @@ function render() {
     const a = node.querySelector(".event-title a");
     a.textContent = ev.title;
     a.href = ev.url || "#";
-    node.querySelector(".event-when").textContent =
-      ev.permanent ? `${ev.category || "Place"} · open any day` : fmtWhen(ev.start);
+    node.querySelector(".event-when").textContent = ev.permanent
+      ? `${ev.category || "Place"} · ${ev.hours ? prettyHours(ev.hours) : "open any day"}`
+      : fmtWhenRange(ev.start, ev.end);
     const distEl = node.querySelector(".event-dist");
     if (ev.distance_km != null) {
       distEl.textContent = `${ev.distance_km} km${ev.direction ? " " + ev.direction : ""}`;
@@ -117,7 +134,8 @@ function render() {
       distEl.remove();
     }
     node.querySelector(".event-where").textContent = ev.locality ? `· ${ev.locality}` : "";
-    node.querySelector(".event-desc").textContent = ev.description || "";
+    // Permanent places show their category+hours in the "when" line already.
+    node.querySelector(".event-desc").textContent = ev.permanent ? "" : (ev.description || "");
 
     const tagWrap = node.querySelector(".event-tags");
     for (const tag of TAGS) {
