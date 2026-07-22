@@ -19,7 +19,8 @@ data class Place(
     val lat: Double,
     val lon: Double,
     val label: String,
-    val city: String = "",
+    val city: String = "",          // city name (often English, from Nominatim)
+    val cityLocal: String = "",      // local/native-language name (for slugs)
     val cc: String = "",
 )
 
@@ -97,7 +98,7 @@ class Geo(private val client: OkHttpClient) {
     suspend fun resolvePlace(query: String): Place? {
         val q = query.trim()
         if (q.isEmpty()) return null
-        val body = request("search?q=${enc(q)}&format=json&limit=1&addressdetails=1")
+        val body = request("search?q=${enc(q)}&format=json&limit=1&addressdetails=1&namedetails=1")
             ?: return null
         val arr = runCatching { JSONArray(body) }.getOrNull() ?: return null
         if (arr.length() == 0) return null
@@ -109,6 +110,7 @@ class Geo(private val client: OkHttpClient) {
                 lon = top.getString("lon").toDouble(),
                 label = top.optString("display_name", q),
                 city = cityFromAddress(addr).ifEmpty { q },
+                cityLocal = top.optJSONObject("namedetails")?.optString("name", "") ?: "",
                 cc = addr?.optString("country_code", "")?.lowercase() ?: "",
             )
         }.getOrNull()
@@ -116,14 +118,16 @@ class Geo(private val client: OkHttpClient) {
 
     /** Resolve the search origin from device coordinates (reverse geocode). */
     suspend fun resolveCoords(lat: Double, lon: Double): Place {
-        val body = request("reverse?lat=$lat&lon=$lon&format=json&zoom=14")
+        val body = request("reverse?lat=$lat&lon=$lon&format=json&zoom=14&namedetails=1")
         var label = ""
         var addr: JSONObject? = null
+        var cityLocal = ""
         if (body != null) {
             val obj = runCatching { JSONObject(body) }.getOrNull()
             if (obj != null) {
                 label = obj.optString("display_name", "")
                 addr = obj.optJSONObject("address")
+                cityLocal = obj.optJSONObject("namedetails")?.optString("name", "") ?: ""
             }
         }
         return Place(
@@ -131,6 +135,7 @@ class Geo(private val client: OkHttpClient) {
             lon = lon,
             label = label.ifEmpty { "%.4f, %.4f".format(lat, lon) },
             city = cityFromAddress(addr),
+            cityLocal = cityLocal,
             cc = addr?.optString("country_code", "")?.lowercase() ?: "",
         )
     }

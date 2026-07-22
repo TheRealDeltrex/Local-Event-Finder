@@ -43,7 +43,7 @@ data class UiState(
         }
 }
 
-const val WINDOW_DAYS = 14
+const val WINDOW_DAYS = 365
 
 /** Whole days from local midnight today to the event's start, or null. */
 private fun dayOffset(start: String): Long? {

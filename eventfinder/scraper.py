@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import html
 import json
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from typing import Iterable, Optional
 from urllib.parse import quote
@@ -148,16 +149,61 @@ def extract_events(html: str, source_name: str) -> list[Event]:
 # --------------------------------------------------------------------------
 # Source fetching
 # --------------------------------------------------------------------------
-def build_source_url(template: str, place: dict) -> str:
+def build_source_url(template: str, place: dict, city_lower_override: Optional[str] = None) -> str:
     city = (place.get("city") or place.get("label", "").split(",")[0]).strip()
     # allevents-style slugs want a lowercased, hyphenated city.
-    city_slug = quote(city.lower().replace(" ", "-"))
+    city_slug = quote(city_lower_override) if city_lower_override else quote(city.lower().replace(" ", "-"))
     return template.format(
         city=quote(city),
         city_lower=city_slug,
         cc=quote((place.get("cc") or "").strip()),
         label=quote(place.get("label", "")),
     )
+
+
+def _strip_diacritics(s: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c)
+    )
+
+
+def city_slug_candidates(place: dict) -> list[str]:
+    """Ordered slug guesses for a city — event sites localize names badly
+    (Nominatim gives "Hanover", but AllEvents wants "hannover"; "München" must
+    become "munich", not "muenchen"). We try the local name, an ASCII-folded
+    version, and the English name, and let the caller pick by proximity."""
+    names = [n for n in (place.get("city_local"), place.get("city")) if n]
+    if not names and place.get("label"):
+        names = [place["label"].split(",")[0]]
+    out: list[str] = []
+    for name in names:
+        base = name.strip().lower().replace(" ", "-")
+        for slug in (base, _strip_diacritics(base)):
+            if slug and slug not in out:
+                out.append(slug)
+    return out
+
+
+def resolve_allevents_slug(
+    place: dict, origin_lat: float, origin_lon: float, range_km: float
+) -> tuple[Optional[str], Optional[str]]:
+    """Pick the AllEvents city slug whose /all events are actually near the
+    origin. Returns (slug, cached_all_html) so the winning page can be reused."""
+    first: tuple[Optional[str], Optional[str]] = (None, None)
+    for slug in city_slug_candidates(place):
+        html = fetch(f"https://allevents.in/{quote(slug)}/all")
+        if first[0] is None:
+            first = (slug, html)
+        if not html:
+            continue
+        events = extract_events(html, "AllEvents")
+        if any(
+            e.lat is not None
+            and geo.haversine_km(origin_lat, origin_lon, e.lat, e.lon) <= range_km
+            for e in events
+        ):
+            return slug, html
+    return first
 
 
 def fetch(url: str) -> Optional[str]:
@@ -218,7 +264,7 @@ def run_search(
     range_km: float,
     store,
     log: Optional[list] = None,
-    window_days: int = 14,
+    window_days: int = 365,
     include_places: bool = True,
 ) -> list[Event]:
     """Find things to do within ``range_km``: scheduled events happening in the
@@ -230,14 +276,32 @@ def run_search(
     origin_lat, origin_lon = place["lat"], place["lon"]
     now = datetime.now(timezone.utc)
 
+    # Work out which AllEvents city slug actually returns local events (city
+    # names localize inconsistently), reusing the winning /all page.
+    enabled = [s for s in sources if s.get("enabled", True)]
+    has_allevents = any("allevents.in" in s.get("url", "") for s in enabled)
+    ae_slug: Optional[str] = None
+    ae_all_html: Optional[str] = None
+    if has_allevents:
+        ae_slug, ae_all_html = resolve_allevents_slug(place, origin_lat, origin_lon, range_km)
+        if ae_slug:
+            log.append(f"AllEvents city slug: {ae_slug}")
+
+    # Fetch sources sequentially: AllEvents returns a degraded, IP-geolocated
+    # response when hit with concurrent requests, so we must not parallelize.
     collected: dict[str, Event] = {}
-    for src in sources:
-        if not src.get("enabled", True):
-            continue
-        url = build_source_url(src["url"], place)
-        html = fetch(url)
+    for src in enabled:
+        is_allevents = "allevents.in" in src.get("url", "")
+        # Reuse the /all page we already fetched while picking the slug.
+        if is_allevents and src["url"].endswith("/all") and ae_all_html is not None:
+            html = ae_all_html
+        else:
+            url = build_source_url(
+                src["url"], place, city_lower_override=ae_slug if is_allevents else None
+            )
+            html = fetch(url)
         if html is None:
-            log.append(f"{src['name']}: could not fetch {url}")
+            log.append(f"{src['name']}: could not fetch")
             continue
         found = extract_events(html, src["name"])
         log.append(f"{src['name']}: {len(found)} event(s) with structured data")

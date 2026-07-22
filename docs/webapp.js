@@ -273,7 +273,7 @@ async function fetchPlaces(lat, lon, rangeKm) {
   out.sort((a, b) => haversine(lat, lon, a.lat, a.lon) - haversine(lat, lon, b.lat, b.lon));
   return out.slice(0, 120);
 }
-const WINDOW_DAYS = 14;
+const WINDOW_DAYS = 365;
 function withinWindow(startISO) {
   if (!startISO) return null;
   const t = Date.parse(startISO); if (isNaN(t)) return null;
@@ -323,7 +323,7 @@ async function runSearch(place, rangeKm, log) {
         if (withinWindow(ev.start) === false) { dropped++; continue; }
         if (!collected.has(ev.id)) { collected.set(ev.id, ev); kept++; }
       }
-      log.push(`${src.name}: ${kept} event(s) in the next 2 weeks (of ${found.length})`);
+      log.push(`${src.name}: ${kept} event(s) in the next 12 months (of ${found.length})`);
     } catch (e) {
       log.push(`${src.name}: live scrape unavailable in-browser (${e.message})`);
     }
@@ -424,7 +424,7 @@ function updateDateUI() {
   fill.style.left = (lo / WINDOW_DAYS) * 100 + "%";
   fill.style.width = ((hi - lo) / WINDOW_DAYS) * 100 + "%";
   el("#date-label").textContent =
-    lo === 0 && hi === WINDOW_DAYS ? "next 2 weeks" : `${labelForDay(lo)} → ${labelForDay(hi)}`;
+    lo === 0 && hi === WINDOW_DAYS ? "next 12 months" : `${labelForDay(lo)} → ${labelForDay(hi)}`;
 }
 function inDateRange(ev) {
   if (ev.permanent) return true;

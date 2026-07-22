@@ -10,22 +10,25 @@ data class Source(
 )
 
 object Sources {
-    /** Same defaults as the web app. */
+    /** Same defaults as the web app. AllEvents per-category pages surface
+     *  different events (concerts, theatre, comedy, shows), so pull several. */
     val DEFAULTS = listOf(
-        Source(
-            name = "Meetup",
-            url = "https://www.meetup.com/find/?location={cc}--{city}&source=EVENTS",
-        ),
-        Source(
-            name = "AllEvents",
-            url = "https://allevents.in/{city_lower}/all",
-        ),
+        Source("Meetup", "https://www.meetup.com/find/?location={cc}--{city}&source=EVENTS"),
+        Source("AllEvents", "https://allevents.in/{city_lower}/all"),
+        Source("AllEvents · Music", "https://allevents.in/{city_lower}/music"),
+        Source("AllEvents · Theatre", "https://allevents.in/{city_lower}/theatre"),
+        Source("AllEvents · Comedy", "https://allevents.in/{city_lower}/comedy"),
+        Source("AllEvents · Arts", "https://allevents.in/{city_lower}/arts"),
+        Source("AllEvents · Nightlife", "https://allevents.in/{city_lower}/nightlife"),
     )
 
-    /** Fill a source template from the resolved search location. */
-    fun buildUrl(template: String, place: Place): String {
+    /** Fill a source template from the resolved search location. When
+     *  [cityLowerOverride] is given (a proximity-validated slug) it is used for
+     *  {city_lower} instead of deriving one from the city name. */
+    fun buildUrl(template: String, place: Place, cityLowerOverride: String? = null): String {
         val city = place.city.ifEmpty { place.label.substringBefore(",") }.trim()
-        val citySlug = enc(city.lowercase().replace(" ", "-"))
+        val citySlug = if (cityLowerOverride != null) enc(cityLowerOverride)
+        else enc(city.lowercase().replace(" ", "-"))
         return template
             .replace("{city}", enc(city))
             .replace("{city_lower}", citySlug)
