@@ -21,11 +21,14 @@
     </header>
 
     <div class="banner">
-      <strong>In-browser demo.</strong> The interface is fully live here — location, distance, tagging and
-      filtering all work. But browsers can't fetch the event sites directly (no CORS), so when a live scrape
-      isn't reachable this demo falls back to <strong>sample events near your location</strong>. For real
-      listings, install the <a href="LocalEventFinder.apk" download style="color:var(--accent)">Android app</a>
+      <strong>⚠️ In-browser demo — limitations.</strong> The interface is fully live (location, distance,
+      tagging, filtering), and real <strong>nearby places</strong> (museums, parks, pools…) load from
+      OpenStreetMap. But browsers can't fetch the ticketed-event sites directly (no CORS / Cloudflare), so
+      <strong>concerts, theatre and other scheduled events don't load here</strong> — the demo shows sample
+      events instead. For real event listings, install the
+      <a href="LocalEventFinder.apk" download style="color:var(--accent)">Android app</a>
       or run the local Flask app (see the <a href="index.html" style="color:var(--accent)">home page</a>).
+      <br><span style="opacity:.85">⏳ A search can take up to a minute — it checks several sources and OpenStreetMap.</span>
     </div>
 
     <section class="panel controls">
@@ -42,13 +45,17 @@
       </div>
 
       <div class="range-row">
-        <label>When: <strong id="date-label">next 12 months</strong></label>
+        <label>When: <strong id="date-label">next 2 weeks</strong></label>
         <div class="dual" id="date-dual">
           <div class="dual-track"></div>
           <div class="dual-fill" id="date-fill"></div>
-          <input id="day-min" type="range" min="0" max="365" value="0" step="1" aria-label="Earliest day" />
-          <input id="day-max" type="range" min="0" max="365" value="365" step="1" aria-label="Latest day" />
+          <input id="day-min" type="range" min="0" max="14" value="0" step="1" aria-label="Earliest day" />
+          <input id="day-max" type="range" min="0" max="14" value="14" step="1" aria-label="Latest day" />
         </div>
+        <label class="chip-toggle" style="margin-top:.5rem" title="Also show events up to a year ahead">
+          <input type="checkbox" id="extend-year" />
+          <span>Show up to 1 year ahead</span>
+        </label>
       </div>
 
       <div class="filter-row">
