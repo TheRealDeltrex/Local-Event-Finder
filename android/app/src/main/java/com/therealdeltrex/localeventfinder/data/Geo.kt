@@ -149,5 +149,21 @@ class Geo(private val client: OkHttpClient) {
                 cos(p1) * cos(p2) * sin(dl / 2) * sin(dl / 2)
             return 2 * r * asin(sqrt(a))
         }
+
+        private val COMPASS_16 = arrayOf(
+            "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+            "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
+        )
+
+        /** 16-point compass direction from point 1 to point 2 (e.g. "NNE"). */
+        fun compass16(lat1: Double, lon1: Double, lat2: Double, lon2: Double): String {
+            val p1 = Math.toRadians(lat1)
+            val p2 = Math.toRadians(lat2)
+            val dl = Math.toRadians(lon2 - lon1)
+            val y = sin(dl) * cos(p2)
+            val x = cos(p1) * sin(p2) - sin(p1) * cos(p2) * cos(dl)
+            val bearing = (Math.toDegrees(Math.atan2(y, x)) + 360) % 360
+            return COMPASS_16[(Math.round(bearing / 22.5).toInt()) % 16]
+        }
     }
 }

@@ -111,7 +111,7 @@ function render() {
       ev.permanent ? `${ev.category || "Place"} · open any day` : fmtWhen(ev.start);
     const distEl = node.querySelector(".event-dist");
     if (ev.distance_km != null) {
-      distEl.textContent = `${ev.distance_km} km away`;
+      distEl.textContent = `${ev.distance_km} km${ev.direction ? " " + ev.direction : ""}`;
       distEl.href = mapsUrl(ev);
     } else {
       distEl.remove();

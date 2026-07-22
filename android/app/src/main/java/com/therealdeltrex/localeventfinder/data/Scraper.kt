@@ -213,6 +213,7 @@ class Scraper(private val client: OkHttpClient, private val geo: Geo) {
             val d = Geo.haversineKm(place.lat, place.lon, ev.lat!!, ev.lon!!)
             ev.distanceKm = Math.round(d * 10) / 10.0
             if (ev.distanceKm!! > rangeKm) continue
+            ev.direction = if (ev.distanceKm!! > 0) Geo.compass16(place.lat, place.lon, ev.lat!!, ev.lon!!) else ""
             ev.tags = effectiveTags(ev, overrides[ev.id])
             results.add(ev)
         }
@@ -227,6 +228,7 @@ class Scraper(private val client: OkHttpClient, private val geo: Geo) {
                 val d = Geo.haversineKm(place.lat, place.lon, ev.lat!!, ev.lon!!)
                 ev.distanceKm = Math.round(d * 10) / 10.0
                 if (ev.distanceKm!! > rangeKm) continue
+                ev.direction = if (ev.distanceKm!! > 0) Geo.compass16(place.lat, place.lon, ev.lat!!, ev.lon!!) else ""
                 ev.tags = effectiveTags(ev, overrides[ev.id])
                 results.add(ev)
                 added++
