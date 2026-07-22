@@ -178,7 +178,7 @@ fun AppScreen(vm: EventsViewModel, onUseLocation: () -> Unit) {
             FilterChip(
                 selected = PERMANENT in state.filters,
                 onClick = { vm.toggleFilter(PERMANENT, PERMANENT !in state.filters) },
-                label = { Text("Always-open") },
+                label = { Text("Permanent") },
             )
         }
 
@@ -244,7 +244,7 @@ private fun EventCard(ev: Event, onToggleTag: (String) -> Unit) {
             val small = MaterialTheme.typography.bodySmall
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (ev.permanent) "${ev.category.ifEmpty { "Place" }} · open any day"
+                    if (ev.permanent) "${ev.category.ifEmpty { "Place" }} · permanent"
                     else formatWhenRange(ev.start, ev.end),
                     style = small, color = muted,
                 )
