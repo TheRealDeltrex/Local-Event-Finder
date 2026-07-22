@@ -201,7 +201,7 @@ fun AppScreen(vm: EventsViewModel, onUseLocation: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text(
-            "⏳ A search can take up to a minute — it checks several event sources and OpenStreetMap.",
+            "⏳ A search can take a minute or two — it checks several event sources and OpenStreetMap.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
