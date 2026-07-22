@@ -117,15 +117,19 @@ def resolve_search_location(
     """
     if lat is not None and lon is not None:
         data = _request(
-            "reverse", {"lat": lat, "lon": lon, "format": "json", "zoom": 14}
+            "reverse",
+            {"lat": lat, "lon": lon, "format": "json", "zoom": 14, "namedetails": 1},
         )
         addr = data.get("address", {}) if isinstance(data, dict) else {}
         label = data.get("display_name", f"{lat:.4f}, {lon:.4f}") if isinstance(data, dict) else ""
+        names = data.get("namedetails", {}) if isinstance(data, dict) else {}
         return {
             "lat": float(lat),
             "lon": float(lon),
             "label": label or f"{lat:.4f}, {lon:.4f}",
             "city": _city_from_address(addr),
+            # local (native-language) place name — some event sites slug by it
+            "city_local": names.get("name", "") if isinstance(names, dict) else "",
             "cc": (addr.get("country_code") or "").lower(),
         }
 
@@ -134,18 +138,20 @@ def resolve_search_location(
         return None
     data = _request(
         "search",
-        {"q": query, "format": "json", "limit": 1, "addressdetails": 1},
+        {"q": query, "format": "json", "limit": 1, "addressdetails": 1, "namedetails": 1},
     )
     if not (isinstance(data, list) and data):
         return None
     top = data[0]
     addr = top.get("address", {})
+    names = top.get("namedetails", {})
     try:
         return {
             "lat": float(top["lat"]),
             "lon": float(top["lon"]),
             "label": top.get("display_name", query),
             "city": _city_from_address(addr) or query,
+            "city_local": names.get("name", "") if isinstance(names, dict) else "",
             "cc": (addr.get("country_code") or "").lower(),
         }
     except (KeyError, ValueError, TypeError):
