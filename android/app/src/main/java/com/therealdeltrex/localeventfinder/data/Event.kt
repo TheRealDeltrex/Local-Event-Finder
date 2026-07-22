@@ -17,6 +17,7 @@ data class Event(
     var lat: Double? = null,
     var lon: Double? = null,
     var distanceKm: Double? = null,
+    var direction: String = "",       // 16-point compass bearing from the search origin
     val permanent: Boolean = false,   // a place you can visit any day
     val category: String = "",        // e.g. "Museum", "Park"
     val autoTags: Set<String> = emptySet(),

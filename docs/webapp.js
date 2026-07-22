@@ -66,6 +66,15 @@ function haversine(a, b, c, d) {
   const x = Math.sin(dp / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin(dl / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(x));
 }
+const COMPASS_16 = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+function compass16(lat1, lon1, lat2, lon2) {
+  const r = Math.PI / 180;
+  const y = Math.sin((lon2 - lon1) * r) * Math.cos(lat2 * r);
+  const x = Math.cos(lat1 * r) * Math.sin(lat2 * r) -
+    Math.sin(lat1 * r) * Math.cos(lat2 * r) * Math.cos((lon2 - lon1) * r);
+  const bearing = (Math.atan2(y, x) / r + 360) % 360;
+  return COMPASS_16[Math.round(bearing / 22.5) % 16];
+}
 function cityFromAddr(addr) {
   if (!addr) return "";
   for (const k of ["city", "town", "village", "municipality", "county", "state"])
@@ -340,6 +349,7 @@ async function runSearch(place, rangeKm, log) {
     }
     ev.distance_km = Math.round(haversine(place.lat, place.lon, ev.lat, ev.lon) * 10) / 10;
     if (ev.distance_km > rangeKm) continue;
+    ev.direction = ev.distance_km > 0 ? compass16(place.lat, place.lon, ev.lat, ev.lon) : "";
     ev.tags = effectiveTags(ev);
     results.push(ev);
   }
@@ -423,7 +433,7 @@ function render() {
     card.innerHTML = `<div class="event-main">
       <h3 class="event-title"><a target="_blank" rel="noopener" href="${esc(ev.url || "#")}">${esc(ev.title)}</a></h3>
       <p class="event-meta"><span>${esc(ev.permanent ? `${ev.category || "Place"} · open any day` : fmtWhen(ev.start))}</span><span class="dot">·</span>
-        <a class="event-dist" target="_blank" rel="noopener" title="Open in Google Maps" href="${esc(mapsUrl(ev))}">${ev.distance_km} km away</a>${ev.locality ? `<span>· ${esc(ev.locality)}</span>` : ""}</p>
+        <a class="event-dist" target="_blank" rel="noopener" title="Open in Google Maps" href="${esc(mapsUrl(ev))}">${ev.distance_km} km${ev.direction ? " " + esc(ev.direction) : ""}</a>${ev.locality ? `<span>· ${esc(ev.locality)}</span>` : ""}</p>
       ${ev.description ? `<p class="event-desc">${esc(ev.description)}</p>` : ""}
     </div><div class="event-tags"></div>`;
     const tagWrap = card.querySelector(".event-tags");

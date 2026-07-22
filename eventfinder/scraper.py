@@ -267,6 +267,10 @@ def run_search(
         )
         if ev.distance_km > range_km:
             continue
+        ev.direction = (
+            geo.compass16(origin_lat, origin_lon, ev.lat, ev.lon)
+            if ev.distance_km > 0 else ""
+        )
         _apply_manual(ev, manual)
         results.append(ev)
     store.save_geocode_cache(geocode_cache)
@@ -285,6 +289,10 @@ def run_search(
             )
             if ev.distance_km > range_km:
                 continue
+            ev.direction = (
+                geo.compass16(origin_lat, origin_lon, ev.lat, ev.lon)
+                if ev.distance_km > 0 else ""
+            )
             _apply_manual(ev, manual)
             results.append(ev)
             added += 1

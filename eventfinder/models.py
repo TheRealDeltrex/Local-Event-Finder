@@ -27,6 +27,7 @@ class Event:
     lat: Optional[float] = None
     lon: Optional[float] = None
     distance_km: Optional[float] = None
+    direction: str = ""        # 16-point compass bearing from the search origin
     permanent: bool = False    # a place you can visit anytime (no fixed date)
     category: str = ""         # e.g. "Museum", "Park" (mostly for permanent places)
     auto_tags: list[str] = field(default_factory=list)
