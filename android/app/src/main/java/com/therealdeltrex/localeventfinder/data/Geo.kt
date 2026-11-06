@@ -1,5 +1,6 @@
 package com.therealdeltrex.localeventfinder.data
 
+import com.therealdeltrex.localeventfinder.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -32,7 +33,7 @@ data class Place(
 class Geo(private val client: OkHttpClient) {
     private val base = "https://nominatim.openstreetmap.org"
     private val userAgent =
-        "LocalEventsFinder-Android/1.0 (https://github.com/TheRealDeltrex/Local-Event-Finder)"
+        "LocalEventsFinder-Android/${BuildConfig.VERSION_NAME} (https://github.com/TheRealDeltrex/Local-Event-Finder)"
     private val minIntervalMs = 1100L
 
     private val throttle = Mutex()

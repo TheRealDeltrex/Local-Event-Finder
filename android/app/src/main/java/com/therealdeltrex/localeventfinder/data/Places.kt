@@ -1,5 +1,6 @@
 package com.therealdeltrex.localeventfinder.data
 
+import com.therealdeltrex.localeventfinder.BuildConfig
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -113,7 +114,7 @@ class Places(client: OkHttpClient) {
             val req = Request.Builder()
                 .url(endpoint)
                 .post(FormBody.Builder().add("data", body).build())
-                .header("User-Agent", "LocalEventsFinder-Android/1.0")
+                .header("User-Agent", "LocalEventsFinder-Android/${BuildConfig.VERSION_NAME}")
                 .build()
             val call = client.newCall(req)
             cont.invokeOnCancellation { runCatching { call.cancel() } }

@@ -15,10 +15,20 @@ const TAG_LABELS = { date: "Possible date", family: "Family friendly" };
 const CORS_PROXY = (url) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
 const NOMINATIM = "https://nominatim.openstreetmap.org";
 
+const APP_VERSION = window.LEF_VERSION || "dev";   // stamped into version.js
+
+// Same defaults as the Flask app (store.py) and Android (Sources.kt). AllEvents
+// sources are handled by gatherAllEvents(): origin city + nearby towns.
 const SOURCES = [
   { name: "Meetup", url: "https://www.meetup.com/find/?location={cc}--{city}&source=EVENTS" },
   { name: "AllEvents", url: "https://allevents.in/{city_lower}/all" },
+  { name: "AllEvents · Music", url: "https://allevents.in/{city_lower}/music" },
+  { name: "AllEvents · Theatre", url: "https://allevents.in/{city_lower}/theatre" },
+  { name: "AllEvents · Comedy", url: "https://allevents.in/{city_lower}/comedy" },
+  { name: "AllEvents · Arts", url: "https://allevents.in/{city_lower}/arts" },
+  { name: "AllEvents · Nightlife", url: "https://allevents.in/{city_lower}/nightlife" },
 ];
+const ALLEVENTS_CATEGORIES = ["music", "theatre", "comedy", "arts", "nightlife"];
 
 const DATE_HINTS = ["date night","romantic","couples","wine","wine tasting","tasting","cocktail","cocktails","speakeasy","rooftop","candlelight","candlelit","dinner","brunch","jazz","live music","concert","acoustic","vinyl","comedy","stand-up","standup","theatre","theater","opera","ballet","gallery","art walk","exhibition","gin","whisky","whiskey","brewery","distillery","tapas","salsa","tango","dance class","sunset","cruise","pottery","paint and sip","quiz night","wine bar"];
 const FAMILY_HINTS = ["family","families","family-friendly","kid","kids","child","children","toddler","toddlers","baby","babies","all ages","all-ages","playground","puppet","storytime","story time","fairy tale","petting zoo","zoo","aquarium","science museum","planetarium","craft","crafts","lego","face painting","bouncy castle","funfair","kinder","familien","familie","spielplatz","märchen","workshop for kids","school holiday","half term","easter egg"];
@@ -81,22 +91,25 @@ function cityFromAddr(addr) {
     if (addr[k]) return addr[k];
   return "";
 }
+// cityLocal is the native-language name — some event sites slug by it
+// (Nominatim gives "Hanover", AllEvents wants "hannover").
 async function resolvePlace(query) {
-  const data = await nominatim(`search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1`);
+  const data = await nominatim(`search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1&namedetails=1`);
   if (!data.length) return null;
   const t = data[0];
   return {
     lat: parseFloat(t.lat), lon: parseFloat(t.lon), label: t.display_name || query,
-    city: cityFromAddr(t.address) || query, cc: (t.address?.country_code || "").toLowerCase(),
+    city: cityFromAddr(t.address) || query, cityLocal: t.namedetails?.name || "",
+    cc: (t.address?.country_code || "").toLowerCase(),
   };
 }
 async function resolveCoords(lat, lon) {
-  let label = `${lat.toFixed(4)}, ${lon.toFixed(4)}`, addr = null;
+  let label = `${lat.toFixed(4)}, ${lon.toFixed(4)}`, addr = null, cityLocal = "";
   try {
-    const d = await nominatim(`reverse?lat=${lat}&lon=${lon}&format=json&zoom=14`);
-    label = d.display_name || label; addr = d.address;
+    const d = await nominatim(`reverse?lat=${lat}&lon=${lon}&format=json&zoom=14&namedetails=1`);
+    label = d.display_name || label; addr = d.address; cityLocal = d.namedetails?.name || "";
   } catch (e) { /* keep coords label */ }
-  return { lat, lon, label, city: cityFromAddr(addr), cc: (addr?.country_code || "").toLowerCase() };
+  return { lat, lon, label, city: cityFromAddr(addr), cityLocal, cc: (addr?.country_code || "").toLowerCase() };
 }
 async function geocode(query) {
   const key = query.toLowerCase();
@@ -178,8 +191,63 @@ function extractEvents(html, sourceName) {
 }
 async function fetchSource(url) {
   const resp = await fetch(CORS_PROXY(url), { signal: AbortSignal.timeout(30000) });
-  if (!resp.ok) throw new Error("proxy " + resp.status);
+  if (!resp.ok) { const e = new Error("proxy " + resp.status); e.status = resp.status; throw e; }
   return resp.text();
+}
+
+// ---- AllEvents: origin city + nearby towns --------------------------------
+function stripDiacritics(s) { return s.normalize("NFKD").replace(/\p{M}+/gu, ""); }
+function nameToSlugs(name) {
+  const base = name.trim().toLowerCase().replace(/ /g, "-");
+  return [...new Set([base, stripDiacritics(base)].filter(Boolean))];
+}
+// Try slug variants of a place name against AllEvents /all; returns the best
+// {slug, html, near}. Throws if the proxy itself is unreachable/blocked.
+async function fetchAllEventsAll(name, olat, olon, rangeKm) {
+  let best = { slug: null, html: null, near: 0 }, lastErr = null;
+  for (const slug of nameToSlugs(name)) {
+    let html;
+    try { html = await fetchSource(`https://allevents.in/${encodeURIComponent(slug)}/all`); }
+    catch (e) { if (e.status !== 404) lastErr = e; continue; }   // 404 = no page for this slug
+    const near = extractEvents(html, "AllEvents").filter((e) =>
+      e.lat != null && haversine(olat, olon, e.lat, e.lon) <= rangeKm).length;
+    if (near > 0) return { slug, html, near };
+    if (best.html == null) best = { slug, html, near };
+  }
+  if (best.html == null && lastErr) throw lastErr;
+  return best;
+}
+async function gatherAllEvents(place, rangeKm, log) {
+  const names = [], has = (n) => names.some((x) => x.toLowerCase() === n.toLowerCase());
+  for (const n of [place.cityLocal, place.city]) if (n && !has(n)) names.push(n);
+  // A town centre can sit just outside the range while its events fall inside.
+  for (const n of await nearbyLocalities(place.lat, place.lon, rangeKm + 20)) if (!has(n)) names.push(n);
+
+  const out = [], seen = new Set(), scored = [];
+  const add = (evs) => { for (const e of evs) if (!seen.has(e.id)) { seen.add(e.id); out.push(e); } };
+  let failures = 0;   // consecutive proxy failures (not just "no such town page")
+  for (const name of names.slice(0, 8)) {
+    let r;
+    try { r = await fetchAllEventsAll(name, place.lat, place.lon, rangeKm); }
+    catch (e) {
+      // The CORS proxy is often blocked by AllEvents; stop early rather than
+      // waiting out a timeout for every nearby town.
+      if (++failures >= 2) { log.push(`AllEvents: unavailable in-browser (${e.message})`); break; }
+      continue;
+    }
+    failures = 0;
+    if (r.html == null) continue;
+    add(extractEvents(r.html, `AllEvents (${name})`));
+    if (r.near > 0) { scored.push([r.near, r.slug, name]); log.push(`AllEvents · ${name}: ${r.near} nearby event(s)`); }
+  }
+  scored.sort((a, b) => b[0] - a[0]);
+  for (const [, slug, name] of scored.slice(0, 1)) {   // deepen the best locality
+    for (const cat of ALLEVENTS_CATEGORIES) {
+      try { add(extractEvents(await fetchSource(`https://allevents.in/${encodeURIComponent(slug)}/${cat}`), `AllEvents (${name}/${cat})`)); }
+      catch (e) { /* skip this category */ }
+    }
+  }
+  return out;
 }
 
 function effectiveTags(ev) {
@@ -236,8 +304,8 @@ function catOf(tags) {
   }
   return null;
 }
-async function fetchPlaces(lat, lon, rangeKm) {
-  const q = overpassQuery(lat, lon, Math.round(rangeKm * 1000));
+// Run an Overpass query against every mirror at once; first answer wins.
+async function runOverpass(q) {
   const tryEndpoint = async (ep) => {
     const resp = await fetch(ep, {
       method: "POST", body: "data=" + encodeURIComponent(q),
@@ -249,11 +317,27 @@ async function fetchPlaces(lat, lon, rangeKm) {
     if (!arr) throw new Error("no elements");
     return arr;
   };
-  let elements;
-  try {
-    // hit all mirrors at once, take the first that answers
-    elements = await Promise.any(OVERPASS.map(tryEndpoint));
-  } catch (e) { return []; }
+  try { return await Promise.any(OVERPASS.map(tryEndpoint)); } catch (e) { return null; }
+}
+// Nearest named towns/cities within the radius — used to look up events in
+// neighbouring places, not just the origin's own (which may have none).
+async function nearbyLocalities(lat, lon, radiusKm, limit = 8) {
+  const r = Math.round(radiusKm * 1000);
+  const q = `[out:json][timeout:40];(node(around:${r},${lat},${lon})[place~"^(city|town)$"];);out 200;`;
+  const elements = (await runOverpass(q)) || [];
+  const scored = [];
+  for (const e of elements) {
+    const name = e.tags?.name;
+    if (name && e.lat != null && e.lon != null) scored.push([haversine(lat, lon, e.lat, e.lon), name]);
+  }
+  scored.sort((a, b) => a[0] - b[0]);
+  const seen = new Set(), names = [];
+  for (const [, n] of scored) if (!seen.has(n.toLowerCase())) { seen.add(n.toLowerCase()); names.push(n); }
+  return names.slice(0, limit);
+}
+async function fetchPlaces(lat, lon, rangeKm) {
+  const elements = await runOverpass(overpassQuery(lat, lon, Math.round(rangeKm * 1000)));
+  if (!elements) return [];
 
   const seen = new Set(), out = [];
   for (const el of elements) {
@@ -313,21 +397,28 @@ function makeSampleEvents(place) {
 async function runSearch(place, rangeKm, log) {
   const collected = new Map();
 
-  // 1) scheduled events happening in the next week (undated listings kept too)
-  let dropped = 0;
+  // 1) scheduled events in the next year (undated listings kept too).
+  //    Non-AllEvents sources (e.g. Meetup) are queried by the origin city.
+  const found = [];
   for (const src of SOURCES) {
+    if (src.url.includes("allevents.in")) continue;
     try {
-      const html = await fetchSource(buildUrl(src.url, place));
-      const found = extractEvents(html, src.name);
-      let kept = 0;
-      for (const ev of found) {
-        if (withinWindow(ev.start) === false) { dropped++; continue; }
-        if (!collected.has(ev.id)) { collected.set(ev.id, ev); kept++; }
-      }
-      log.push(`${src.name}: ${kept} event(s) in the next 12 months (of ${found.length})`);
+      const evs = extractEvents(await fetchSource(buildUrl(src.url, place)), src.name);
+      log.push(`${src.name}: ${evs.length} event(s) with structured data`);
+      found.push(...evs);
     } catch (e) {
       log.push(`${src.name}: live scrape unavailable in-browser (${e.message})`);
     }
+  }
+  //    AllEvents: the origin city AND nearby towns within the radius, so a
+  //    remote location still finds events in neighbouring places.
+  if (SOURCES.some((s) => s.url.includes("allevents.in"))) {
+    found.push(...await gatherAllEvents(place, rangeKm, log));
+  }
+  let dropped = 0;
+  for (const ev of found) {
+    if (withinWindow(ev.start) === false) { dropped++; continue; }
+    if (!collected.has(ev.id)) collected.set(ev.id, ev);
   }
   if (dropped) log.push(`skipped ${dropped} event(s) outside the next ${WINDOW_DAYS} days`);
 
@@ -549,4 +640,5 @@ el("#day-max").addEventListener("input", onDaySlide);
 const extendEl = el("#extend-year");
 if (extendEl) extendEl.addEventListener("change", () => setViewWindow(extendEl.checked ? 365 : 14));
 setViewWindow(14);   // default to a two-week view
+document.querySelectorAll("[data-app-version]").forEach((n) => (n.textContent = "v" + APP_VERSION));
 setStatus("Share your location or type a place to start.");
