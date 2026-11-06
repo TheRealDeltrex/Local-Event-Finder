@@ -12,7 +12,7 @@ from typing import Optional
 
 import requests
 
-from . import geo
+from . import geo, tagging
 from .models import Event, event_id
 
 # The public Overpass instances get overloaded and return 504/429; rotate
@@ -27,37 +27,39 @@ OVERPASS_ENDPOINTS = [
 # OSM key order to check, most specific first.
 _KEYS = ("tourism", "leisure", "amenity", "historic", "natural")
 
-# OSM (key, value) -> (human label, tags). Drives both the query and tagging.
-CATEGORIES: dict[tuple[str, str], tuple[str, list[str]]] = {
-    ("tourism", "museum"): ("Museum", ["family"]),
-    ("tourism", "gallery"): ("Gallery", ["date"]),
-    ("tourism", "zoo"): ("Zoo", ["family"]),
-    ("tourism", "theme_park"): ("Theme park", ["family"]),
-    ("tourism", "aquarium"): ("Aquarium", ["family"]),
-    ("tourism", "attraction"): ("Attraction", []),
-    ("tourism", "viewpoint"): ("Viewpoint", ["date"]),
-    ("tourism", "artwork"): ("Public art", ["date"]),
-    ("leisure", "park"): ("Park", ["family"]),
-    ("leisure", "garden"): ("Garden", ["date"]),
-    ("leisure", "nature_reserve"): ("Nature reserve", []),
-    ("leisure", "water_park"): ("Water park", ["family"]),
-    ("leisure", "miniature_golf"): ("Mini golf", ["family"]),
-    ("leisure", "golf_course"): ("Golf course", []),
-    ("leisure", "sports_centre"): ("Sports centre", ["family"]),
-    ("leisure", "swimming_pool"): ("Swimming pool", ["family"]),
-    ("leisure", "bathing_place"): ("Bathing spot", ["family"]),
-    ("leisure", "horse_riding"): ("Horse riding", ["family"]),
-    ("leisure", "playground"): ("Playground", ["family"]),
-    ("leisure", "bird_hide"): ("Bird hide", ["date"]),
-    ("amenity", "cinema"): ("Cinema", ["date"]),
-    ("amenity", "theatre"): ("Theatre", ["date"]),
-    ("amenity", "arts_centre"): ("Arts centre", ["date"]),
-    ("amenity", "public_bath"): ("Swimming pool", ["family"]),
-    ("historic", "castle"): ("Castle", ["date"]),
-    ("historic", "monument"): ("Monument", []),
-    ("historic", "memorial"): ("Memorial", []),
-    ("historic", "ruins"): ("Ruins", ["date"]),
-    ("natural", "beach"): ("Beach", ["family"]),
+# OSM (key, value) -> (human label, type, kid friendly). Drives both the query
+# and tagging. "Kid friendly" is only for places actually aimed at children —
+# a park is fine for kids but isn't *for* kids, a playground is.
+CATEGORIES: dict[tuple[str, str], tuple[str, str, bool]] = {
+    ("tourism", "museum"): ("Museum", "museum", False),
+    ("tourism", "gallery"): ("Gallery", "art", False),
+    ("tourism", "zoo"): ("Zoo", "animals", True),
+    ("tourism", "theme_park"): ("Theme park", "attraction", True),
+    ("tourism", "aquarium"): ("Aquarium", "animals", True),
+    ("tourism", "attraction"): ("Attraction", "attraction", False),
+    ("tourism", "viewpoint"): ("Viewpoint", "park", False),
+    ("tourism", "artwork"): ("Public art", "art", False),
+    ("leisure", "park"): ("Park", "park", False),
+    ("leisure", "garden"): ("Garden", "park", False),
+    ("leisure", "nature_reserve"): ("Nature reserve", "park", False),
+    ("leisure", "water_park"): ("Water park", "water", True),
+    ("leisure", "miniature_golf"): ("Mini golf", "attraction", False),
+    ("leisure", "golf_course"): ("Golf course", "sport", False),
+    ("leisure", "sports_centre"): ("Sports centre", "sport", False),
+    ("leisure", "swimming_pool"): ("Swimming pool", "water", False),
+    ("leisure", "bathing_place"): ("Bathing spot", "water", False),
+    ("leisure", "horse_riding"): ("Horse riding", "sport", False),
+    ("leisure", "playground"): ("Playground", "play", True),
+    ("leisure", "bird_hide"): ("Bird hide", "park", False),
+    ("amenity", "cinema"): ("Cinema", "film", False),
+    ("amenity", "theatre"): ("Theatre", "theatre", False),
+    ("amenity", "arts_centre"): ("Arts centre", "art", False),
+    ("amenity", "public_bath"): ("Swimming pool", "water", False),
+    ("historic", "castle"): ("Castle", "museum", False),
+    ("historic", "monument"): ("Monument", "museum", False),
+    ("historic", "memorial"): ("Memorial", "museum", False),
+    ("historic", "ruins"): ("Ruins", "museum", False),
+    ("natural", "beach"): ("Beach", "water", False),
 }
 
 
@@ -85,17 +87,20 @@ def build_query(lat: float, lon: float, radius_m: int) -> str:
     )
 
 
-def _category_of(tags: dict) -> Optional[tuple[str, list[str]]]:
+def _category_of(tags: dict) -> Optional[tuple[str, str, bool]]:
     # Public swimming pools are mapped inconsistently (leisure=swimming_pool,
-    # water_park, or sports_centre+sport=swimming, amenity=public_bath). Detect
-    # any of them and label clearly as "Swimming pool".
+    # sports_centre+sport=swimming, amenity=public_bath). Detect any of them and
+    # label clearly as "Swimming pool". Water parks keep their own label because
+    # they are aimed at kids.
+    if tags.get("leisure") == "water_park":
+        return CATEGORIES[("leisure", "water_park")]
     sport = (tags.get("sport") or "").lower()
     if (
         "swimming" in sport
-        or tags.get("leisure") in ("swimming_pool", "water_park")
+        or tags.get("leisure") == "swimming_pool"
         or tags.get("amenity") == "public_bath"
     ):
-        return ("Swimming pool", ["family"])
+        return ("Swimming pool", "water", False)
     for key in _KEYS:
         val = tags.get(key)
         if val and (key, val) in CATEGORIES:
@@ -182,7 +187,7 @@ def fetch_places(lat: float, lon: float, radius_km: float, limit: int = 120) -> 
         cat = _category_of(tags)
         if not cat:
             continue
-        label, cat_tags = cat
+        label, place_type, kids = cat
         plat = el.get("lat") or (el.get("center") or {}).get("lat")
         plon = el.get("lon") or (el.get("center") or {}).get("lon")
         if plat is None or plon is None:
@@ -208,7 +213,8 @@ def fetch_places(lat: float, lon: float, radius_km: float, limit: int = 120) -> 
                 lat=float(plat),
                 lon=float(plon),
                 hours=tags.get("opening_hours", ""),
-                auto_tags=list(cat_tags),
+                type=place_type,
+                auto_tags=[tagging.TAG_KIDS] if kids else [],
             )
         )
     # Overpass returns by id, not distance; keep the nearest `limit` so a close

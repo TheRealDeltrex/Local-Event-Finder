@@ -47,37 +47,40 @@ class Places(client: OkHttpClient) {
 
     private val keys = listOf("tourism", "leisure", "amenity", "historic", "natural")
 
-    // "key|value" -> (label, tags)
-    private val cats: Map<String, Pair<String, List<String>>> = linkedMapOf(
-        "tourism|museum" to ("Museum" to listOf(Tagging.TAG_FAMILY)),
-        "tourism|gallery" to ("Gallery" to listOf(Tagging.TAG_DATE)),
-        "tourism|zoo" to ("Zoo" to listOf(Tagging.TAG_FAMILY)),
-        "tourism|theme_park" to ("Theme park" to listOf(Tagging.TAG_FAMILY)),
-        "tourism|aquarium" to ("Aquarium" to listOf(Tagging.TAG_FAMILY)),
-        "tourism|attraction" to ("Attraction" to emptyList()),
-        "tourism|viewpoint" to ("Viewpoint" to listOf(Tagging.TAG_DATE)),
-        "tourism|artwork" to ("Public art" to listOf(Tagging.TAG_DATE)),
-        "leisure|park" to ("Park" to listOf(Tagging.TAG_FAMILY)),
-        "leisure|garden" to ("Garden" to listOf(Tagging.TAG_DATE)),
-        "leisure|nature_reserve" to ("Nature reserve" to emptyList()),
-        "leisure|water_park" to ("Water park" to listOf(Tagging.TAG_FAMILY)),
-        "leisure|miniature_golf" to ("Mini golf" to listOf(Tagging.TAG_FAMILY)),
-        "leisure|golf_course" to ("Golf course" to emptyList()),
-        "leisure|sports_centre" to ("Sports centre" to listOf(Tagging.TAG_FAMILY)),
-        "leisure|swimming_pool" to ("Swimming pool" to listOf(Tagging.TAG_FAMILY)),
-        "leisure|bathing_place" to ("Bathing spot" to listOf(Tagging.TAG_FAMILY)),
-        "leisure|horse_riding" to ("Horse riding" to listOf(Tagging.TAG_FAMILY)),
-        "leisure|playground" to ("Playground" to listOf(Tagging.TAG_FAMILY)),
-        "leisure|bird_hide" to ("Bird hide" to listOf(Tagging.TAG_DATE)),
-        "amenity|cinema" to ("Cinema" to listOf(Tagging.TAG_DATE)),
-        "amenity|theatre" to ("Theatre" to listOf(Tagging.TAG_DATE)),
-        "amenity|arts_centre" to ("Arts centre" to listOf(Tagging.TAG_DATE)),
-        "amenity|public_bath" to ("Swimming pool" to listOf(Tagging.TAG_FAMILY)),
-        "historic|castle" to ("Castle" to listOf(Tagging.TAG_DATE)),
-        "historic|monument" to ("Monument" to emptyList()),
-        "historic|memorial" to ("Memorial" to emptyList()),
-        "historic|ruins" to ("Ruins" to listOf(Tagging.TAG_DATE)),
-        "natural|beach" to ("Beach" to listOf(Tagging.TAG_FAMILY)),
+    /** label, type and whether it's aimed at kids (a playground, not a park). */
+    data class PlaceCat(val label: String, val type: String, val kids: Boolean)
+
+    // "key|value" -> category
+    private val cats: Map<String, PlaceCat> = linkedMapOf(
+        "tourism|museum" to PlaceCat("Museum", "museum", false),
+        "tourism|gallery" to PlaceCat("Gallery", "art", false),
+        "tourism|zoo" to PlaceCat("Zoo", "animals", true),
+        "tourism|theme_park" to PlaceCat("Theme park", "attraction", true),
+        "tourism|aquarium" to PlaceCat("Aquarium", "animals", true),
+        "tourism|attraction" to PlaceCat("Attraction", "attraction", false),
+        "tourism|viewpoint" to PlaceCat("Viewpoint", "park", false),
+        "tourism|artwork" to PlaceCat("Public art", "art", false),
+        "leisure|park" to PlaceCat("Park", "park", false),
+        "leisure|garden" to PlaceCat("Garden", "park", false),
+        "leisure|nature_reserve" to PlaceCat("Nature reserve", "park", false),
+        "leisure|water_park" to PlaceCat("Water park", "water", true),
+        "leisure|miniature_golf" to PlaceCat("Mini golf", "attraction", false),
+        "leisure|golf_course" to PlaceCat("Golf course", "sport", false),
+        "leisure|sports_centre" to PlaceCat("Sports centre", "sport", false),
+        "leisure|swimming_pool" to PlaceCat("Swimming pool", "water", false),
+        "leisure|bathing_place" to PlaceCat("Bathing spot", "water", false),
+        "leisure|horse_riding" to PlaceCat("Horse riding", "sport", false),
+        "leisure|playground" to PlaceCat("Playground", "play", true),
+        "leisure|bird_hide" to PlaceCat("Bird hide", "park", false),
+        "amenity|cinema" to PlaceCat("Cinema", "film", false),
+        "amenity|theatre" to PlaceCat("Theatre", "theatre", false),
+        "amenity|arts_centre" to PlaceCat("Arts centre", "art", false),
+        "amenity|public_bath" to PlaceCat("Swimming pool", "water", false),
+        "historic|castle" to PlaceCat("Castle", "museum", false),
+        "historic|monument" to PlaceCat("Monument", "museum", false),
+        "historic|memorial" to PlaceCat("Memorial", "museum", false),
+        "historic|ruins" to PlaceCat("Ruins", "museum", false),
+        "natural|beach" to PlaceCat("Beach", "water", false),
     )
 
     private fun query(lat: Double, lon: Double, radiusM: Int): String {
@@ -93,13 +96,15 @@ class Places(client: OkHttpClient) {
             "node.a;out 300;way.a;out center 300;relation.a;out center 100;"
     }
 
-    private fun categoryOf(tags: JSONObject): Pair<String, List<String>>? {
+    private fun categoryOf(tags: JSONObject): PlaceCat? {
         // Public pools are tagged inconsistently — label any of them "Swimming pool".
+        // Water parks keep their own label (they're aimed at kids).
         val sport = tags.optString("sport", "").lowercase()
         val leisure = tags.optString("leisure", "")
+        if (leisure == "water_park") return cats["leisure|water_park"]
         if (sport.contains("swimming") || leisure == "swimming_pool" ||
-            leisure == "water_park" || tags.optString("amenity", "") == "public_bath") {
-            return "Swimming pool" to listOf(Tagging.TAG_FAMILY)
+            tags.optString("amenity", "") == "public_bath") {
+            return PlaceCat("Swimming pool", "water", false)
         }
         for (key in keys) {
             val v = tags.optString(key, "")
@@ -200,14 +205,15 @@ class Places(client: OkHttpClient) {
                     title = name,
                     url = website,
                     source = "OpenStreetMap",
-                    description = cat.first,
+                    description = cat.label,
                     permanent = true,
-                    category = cat.first,
+                    category = cat.label,
+                    type = cat.type,
                     hours = tags.optString("opening_hours", ""),
                     locality = tags.optString("addr:city", ""),
                     lat = plat,
                     lon = plon,
-                    autoTags = cat.second.toSet(),
+                    autoTags = if (cat.kids) setOf(Tagging.TAG_KIDS) else emptySet(),
                 )
             )
         }

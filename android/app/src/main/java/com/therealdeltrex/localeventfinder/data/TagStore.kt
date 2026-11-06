@@ -10,7 +10,7 @@ data class TagOverride(val add: Set<String> = emptySet(), val remove: Set<String
 
 /**
  * Local persistence in SharedPreferences — nothing leaves the device.
- * Stores manual tag overrides and the last-used location + range.
+ * Stores manual tag overrides, the last-used location + range and hidden types.
  */
 class TagStore(context: Context) {
     private val prefs = context.getSharedPreferences("local_event_finder", Context.MODE_PRIVATE)
@@ -69,6 +69,9 @@ class TagStore(context: Context) {
     fun loadRangeKm(): Int = prefs.getInt(KEY_RANGE, 40)
     fun saveRangeKm(km: Int) = prefs.edit().putInt(KEY_RANGE, km).apply()
 
+    fun loadHiddenTypes(): Set<String> = prefs.getStringSet(KEY_HIDDEN_TYPES, null)?.toSet() ?: emptySet()
+    fun saveHiddenTypes(types: Set<String>) = prefs.edit().putStringSet(KEY_HIDDEN_TYPES, types.toSet()).apply()
+
     fun loadHomeLabel(): String? = prefs.getString(KEY_HOME, null)
     fun saveHomeLabel(label: String) = prefs.edit().putString(KEY_HOME, label).apply()
 
@@ -81,5 +84,6 @@ class TagStore(context: Context) {
         private const val KEY_TAGS = "manual_tags"
         private const val KEY_RANGE = "range_km"
         private const val KEY_HOME = "home_label"
+        private const val KEY_HIDDEN_TYPES = "hidden_types"
     }
 }

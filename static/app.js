@@ -2,6 +2,9 @@
 
 const TAGS = window.APP_TAGS || [];
 const TAG_LABELS = window.APP_TAG_LABELS || {};
+const TYPES = window.APP_TYPES || [];
+const TYPE_BY_KEY = Object.fromEntries(TYPES.map((t) => [t.key, t]));
+const TYPE_FILTER_KEY = "lef_hidden_types";
 
 const el = (sel) => document.querySelector(sel);
 const statusEl = el("#status");
@@ -56,10 +59,26 @@ function prettyHours(s) {
   return String(s).replace(/\s*;\s*/g, " · ").trim();
 }
 
-function activeTagFilters() {
-  const on = new Set();
-  document.querySelectorAll(".tag-filter:checked").forEach((c) => on.add(c.value));
-  return on;
+function activeFilters() {
+  const types = new Set();
+  document.querySelectorAll(".type-filter:checked").forEach((c) => types.add(c.value));
+  return {
+    types,
+    onlyKids: el("#only-kids").checked,
+    events: el("#show-events").checked,
+    permanent: el("#show-permanent").checked,
+  };
+}
+// Remember which types were switched off (per browser).
+function saveTypeFilter() {
+  const hidden = [];
+  document.querySelectorAll(".type-filter").forEach((c) => { if (!c.checked) hidden.push(c.value); });
+  try { localStorage.setItem(TYPE_FILTER_KEY, JSON.stringify(hidden)); } catch (e) { /* ignore */ }
+}
+function loadTypeFilter() {
+  let hidden = [];
+  try { hidden = JSON.parse(localStorage.getItem(TYPE_FILTER_KEY) || "[]"); } catch (e) { /* ignore */ }
+  document.querySelectorAll(".type-filter").forEach((c) => { c.checked = !hidden.includes(c.value); });
 }
 
 // ---- date range (dual slider, day offsets within the 2-week window) ----
@@ -109,15 +128,14 @@ function inDateRange(ev) {
 function passesFilter(ev, filters, maxRange) {
   if (ev.distance_km != null && ev.distance_km > maxRange) return false;
   if (!inDateRange(ev)) return false;
-  // "Always-open" places can be filtered out entirely.
-  if (ev.permanent && !filters.has("__permanent__")) return false;
-  const tags = ev.tags || [];
-  if (tags.length === 0) return filters.has("__untagged__");
-  return tags.some((t) => filters.has(t));
+  if (ev.permanent ? !filters.permanent : !filters.events) return false;
+  if (!filters.types.has(ev.type || "unknown")) return false;
+  if (filters.onlyKids && !(ev.tags || []).includes("kids")) return false;
+  return true;
 }
 
 function render() {
-  const filters = activeTagFilters();
+  const filters = activeFilters();
   const maxRange = Number(rangeEl.value);
   resultsEl.innerHTML = "";
 
@@ -127,7 +145,7 @@ function render() {
   }
   if (shown.length === 0) {
     resultsEl.innerHTML =
-      '<p class="empty">Nothing matches these filters. Try widening the distance or date range, or turning on more tags.</p>';
+      '<p class="empty">Nothing matches these filters. Try widening the distance or date range, or turning on more types.</p>';
     return;
   }
 
@@ -150,6 +168,12 @@ function render() {
     node.querySelector(".event-where").textContent = ev.locality ? `· ${ev.locality}` : "";
     // Permanent places show their category+hours in the "when" line already.
     node.querySelector(".event-desc").textContent = ev.permanent ? "" : (ev.description || "");
+
+    const type = TYPE_BY_KEY[ev.type] || TYPE_BY_KEY.unknown || { label: "Unknown", color: "#757575" };
+    const typeTag = node.querySelector(".type-tag");
+    typeTag.textContent = type.label;
+    typeTag.style.setProperty("--type-color", type.color);
+    node.querySelector(".card").style.setProperty("--type-color", type.color);
 
     const tagWrap = node.querySelector(".event-tags");
     for (const tag of TAGS) {
@@ -261,9 +285,19 @@ rangeEl.addEventListener("input", () => {
   render(); // live client-side range filtering
 });
 
-document.querySelectorAll(".tag-filter").forEach((c) =>
-  c.addEventListener("change", render)
+document.querySelectorAll(".type-filter").forEach((c) =>
+  c.addEventListener("change", () => { saveTypeFilter(); render(); })
 );
+["#only-kids", "#show-events", "#show-permanent"].forEach((id) =>
+  el(id).addEventListener("change", render)
+);
+function setAllTypes(on) {
+  document.querySelectorAll(".type-filter").forEach((c) => { c.checked = on; });
+  saveTypeFilter();
+  render();
+}
+el("#types-all").addEventListener("click", () => setAllTypes(true));
+el("#types-none").addEventListener("click", () => setAllTypes(false));
 
 function onDaySlide(e) {
   // keep the two thumbs from crossing
@@ -289,6 +323,7 @@ if (extendEl) {
     rangeEl.value = Math.min(40, window.APP_RANGE);
     rangeVal.textContent = rangeEl.value;
   }
+  loadTypeFilter();
   setViewWindow(14);   // default to a two-week view
   if (window.APP_HOME && window.APP_HOME.label) {
     el("#loc-name").value = window.APP_HOME.label.split(",")[0];

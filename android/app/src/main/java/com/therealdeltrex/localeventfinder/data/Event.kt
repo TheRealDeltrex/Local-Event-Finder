@@ -21,7 +21,8 @@ data class Event(
     val permanent: Boolean = false,   // a place you can visit any day
     val category: String = "",        // e.g. "Museum", "Park"
     val hours: String = "",           // opening hours (OSM opening_hours, permanent places)
-    val autoTags: Set<String> = emptySet(),
+    val type: String = Tagging.TYPE_UNKNOWN,  // primary type: music, park, … (see Tagging.TYPES)
+    val autoTags: Set<String> = emptySet(),  // secondary tags, e.g. "kids"
     var tags: Set<String> = emptySet(),
 )
 

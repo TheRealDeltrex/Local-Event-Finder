@@ -1,7 +1,8 @@
 """Local Events Finder — a small local Flask app.
 
 Finds things to do near you by scraping structured event data, filters them
-to a distance range, and tags them as possible dates / family-friendly.
+to a distance range, and tags each one with a type (music, park, …) and, where it's
+meant for children, as kid friendly.
 Runs entirely on your machine; the only outbound calls are to the event
 sources and to OpenStreetMap for geocoding.
 """
@@ -15,7 +16,7 @@ from flask import Flask, jsonify, render_template, request
 
 from eventfinder import __version__, geo, scraper
 from eventfinder.store import Store
-from eventfinder.tagging import ALL_TAGS, TAG_LABELS
+from eventfinder.tagging import ALL_TAGS, TAG_LABELS, TYPES
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get(
@@ -34,6 +35,7 @@ def index():
         "index.html",
         tag_labels=TAG_LABELS,
         all_tags=ALL_TAGS,
+        types=[{"key": k, "label": label, "color": c} for k, label, c in TYPES],
         settings=settings,
         version=__version__,
     )
@@ -92,7 +94,7 @@ def api_search():
 def api_set_tags(event_id: str):
     """Persist a manual tag override for one event.
 
-    Body: {"tag": "date"|"family", "state": true|false}.
+    Body: {"tag": "kids", "state": true|false, "auto": true|false}.
     We record it as an add/remove relative to the auto-guess so it survives
     re-scrapes even though we don't store the event body itself.
     """

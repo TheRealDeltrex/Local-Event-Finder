@@ -4,13 +4,13 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Local Events Finder</title>
-<meta name="description" content="Find things to do near you within range — tagged as date ideas or family friendly. Run it in your browser or download the Android app." />
+<meta name="description" content="Find things to do near you within range — tagged by type (music, parks, theatre, …) and kid friendly. Run it in your browser or download the Android app." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%8D%3C/text%3E%3C/svg%3E" />
 <style>
   :root {
     --bg:#0b1220; --bg-deep:#070c14; --surface:#121c2e; --surface-2:#1a2740;
     --border:#2a3d5c; --text:#e8eef8; --muted:#8fa3c1; --accent:#5eb8e0;
-    --accent-hover:#8ad0f0; --date:#e07ea8; --family:#7ee0a0;
+    --accent-hover:#8ad0f0; --kids:#ffd54f;
     --font:"Segoe UI",system-ui,-apple-system,sans-serif;
   }
   * { box-sizing:border-box; }
@@ -25,8 +25,8 @@
   .hero p { color:var(--muted); font-size:1.05rem; max-width:44rem; margin:0 auto; }
   .tags { display:flex; gap:.5rem; justify-content:center; margin-top:1rem; flex-wrap:wrap; }
   .pill { border-radius:999px; padding:.3rem .8rem; font-size:.8rem; font-weight:600; border:1px solid var(--border); }
-  .pill.date { color:var(--date); border-color:var(--date); }
-  .pill.family { color:var(--family); border-color:var(--family); }
+  .pill.type { color:#fff; border-color:var(--c); background:var(--c); }
+  .pill.kids { color:var(--kids); border-color:var(--kids); }
   .pill.range { color:var(--accent); border-color:var(--accent); }
 
   .cards { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:2.5rem; }
@@ -67,11 +67,13 @@
     <section class="hero">
       <h1>📍 Local Events Finder</h1>
       <p>Find things to do near you. It scrapes local events, works out how far
-      each one is, and tags them as date ideas or family-friendly — so you can
+      each one is, and tags each by type (music, park, theatre, …) — so you can
       filter down to exactly what you're after.</p>
       <div class="tags">
-        <span class="pill date">Possible date</span>
-        <span class="pill family">Family friendly</span>
+        <span class="pill type" style="--c:#8e24aa">Music</span>
+        <span class="pill type" style="--c:#2e7d32">Park &amp; nature</span>
+        <span class="pill type" style="--c:#c62828">Theatre &amp; shows</span>
+        <span class="pill kids">Kid friendly</span>
         <span class="pill range">Within 40 km</span>
       </div>
     </section>
@@ -86,7 +88,7 @@
 
       <div class="card">
         <h2>🤖 Android app</h2>
-        <p class="sub">A native app with device GPS, offline tag storage, and the same date / family tagging. Signed by Deltrex.</p>
+        <p class="sub">A native app with device GPS, offline tag storage, and the same type and kid-friendly tagging. Signed by Deltrex.</p>
         <a class="btn" href="LocalEventFinder.apk" download>Download the APK</a>
         <p class="note">Version <span data-app-version>—</span> · Android 8.0+. Enable “install from unknown sources”, then open the file.</p>
       </div>
@@ -110,7 +112,7 @@ python app.py            # opens http://127.0.0.1:5001</code></pre>
         <li><strong>Places</strong> — adds things you can do any day, like museums, parks and pools, from OpenStreetMap.</li>
         <li><strong>Your location</strong> — device GPS or a typed town/city, resolved via OpenStreetMap.</li>
         <li><strong>Within range</strong> — everything is distance-filtered, with distance and direction shown.</li>
-        <li><strong>Tags</strong> — auto-tagged as <em>possible date</em> / <em>family friendly</em>, with manual overrides that stick.</li>
+        <li><strong>Tags</strong> — every result gets a coloured type (music, park, theatre, … or unknown) you can filter by, plus a <em>kid friendly</em> tag for things actually aimed at children, with manual overrides that stick.</li>
         <li><strong>Filter</strong> — narrow results live by tag and range.</li>
       </ul>
     </div>
