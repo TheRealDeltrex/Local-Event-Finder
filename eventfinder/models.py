@@ -31,7 +31,8 @@ class Event:
     permanent: bool = False    # a place you can visit anytime (no fixed date)
     category: str = ""         # e.g. "Museum", "Park" (mostly for permanent places)
     hours: str = ""            # opening hours (OSM opening_hours, for permanent places)
-    auto_tags: list[str] = field(default_factory=list)
+    type: str = "unknown"      # primary type: music, park, … (see tagging.TYPES)
+    auto_tags: list[str] = field(default_factory=list)  # secondary tags, e.g. "kids"
     tags: list[str] = field(default_factory=list)   # effective tags (auto + manual)
 
     def as_dict(self) -> dict:

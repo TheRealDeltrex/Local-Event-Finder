@@ -4,8 +4,9 @@
 
 Find things to do near you. Pick a place (or use your location), choose how far
 you're willing to go, and browse what's on: scheduled events and places you can
-visit any day. Everything is tagged as a **possible date** or **family
-friendly**, and you can filter by tag, distance and date.
+visit any day. Every result is tagged with a colour-coded **type** (music,
+park, theatre, …) and, when it's meant for children, as **kid friendly**. You
+can filter by type, distance and date.
 
 ## Ways to use it
 
@@ -31,9 +32,10 @@ directly, so it may find fewer scheduled events than the other two.
    viewpoints from OpenStreetMap, with opening hours where known.
 4. **What's close enough.** Everything is located, measured from you (distance
    and compass direction), and dropped if it's out of range.
-5. **What it's good for.** Each result is tagged automatically from its
-   description. You can add or remove a tag by hand, and your choice is kept the
-   next time you search.
+5. **What it is.** Each result gets a type from its category or description
+   ("unknown" when it can't tell), and a kid-friendly tag only when it is aimed
+   at children. You can switch the kid-friendly tag on or off by hand, and
+   your choice is kept the next time you search.
 
 No accounts and no API keys. Your searches and tags stay on your device.
 
