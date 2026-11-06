@@ -13,7 +13,7 @@ from threading import Timer
 
 from flask import Flask, jsonify, render_template, request
 
-from eventfinder import geo, scraper
+from eventfinder import __version__, geo, scraper
 from eventfinder.store import Store
 from eventfinder.tagging import ALL_TAGS, TAG_LABELS
 
@@ -35,7 +35,13 @@ def index():
         tag_labels=TAG_LABELS,
         all_tags=ALL_TAGS,
         settings=settings,
+        version=__version__,
     )
+
+
+@app.get("/api/version")
+def api_version():
+    return jsonify({"version": __version__})
 
 
 @app.post("/api/search")
@@ -77,6 +83,7 @@ def api_search():
             "range_km": range_km,
             "events": [e.as_dict() for e in events],
             "log": log,
+            "version": __version__,
         }
     )
 

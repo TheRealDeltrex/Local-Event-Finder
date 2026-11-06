@@ -229,7 +229,7 @@ fun AppScreen(vm: EventsViewModel, onUseLocation: () -> Unit) {
 
         Spacer(Modifier.height(20.dp))
         Text(
-            "Created by Deltrex",
+            "Local Events Finder v${BuildConfig.VERSION_NAME} · Created by Deltrex",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
