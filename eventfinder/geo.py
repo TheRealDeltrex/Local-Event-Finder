@@ -14,9 +14,11 @@ from typing import Optional
 
 import requests
 
+from . import __version__
+
 NOMINATIM_URL = "https://nominatim.openstreetmap.org"
 # Nominatim's usage policy wants a real, identifying User-Agent.
-USER_AGENT = "LocalEventsFinder/1.0 (self-hosted; https://github.com/TheRealDeltrex)"
+USER_AGENT = f"LocalEventsFinder/{__version__} (self-hosted; https://github.com/TheRealDeltrex/Local-Event-Finder)"
 _MIN_INTERVAL = 1.1  # seconds between live Nominatim calls
 
 _lock = threading.Lock()

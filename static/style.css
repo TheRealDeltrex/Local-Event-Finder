@@ -159,3 +159,6 @@ a.event-dist:hover { text-decoration: underline; }
   .card.event { flex-direction: column; }
   .event-tags { flex-direction: row; }
 }
+
+footer.credit { text-align: center; color: var(--muted); font-size: .82rem; margin-top: 2rem; }
+footer.credit a { color: var(--accent); }

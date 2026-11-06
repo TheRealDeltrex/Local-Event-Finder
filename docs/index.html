@@ -88,7 +88,7 @@
         <h2>🤖 Android app</h2>
         <p class="sub">A native app with device GPS, offline tag storage, and the same date / family tagging. Signed by Deltrex.</p>
         <a class="btn" href="LocalEventFinder.apk" download>Download the APK</a>
-        <p class="note">Android 8.0+. Enable “install from unknown sources”, then open the file.</p>
+        <p class="note">Version <span data-app-version>—</span> · Android 8.0+. Enable “install from unknown sources”, then open the file.</p>
       </div>
     </div>
 
@@ -106,9 +106,10 @@ python app.py            # opens http://127.0.0.1:5001</code></pre>
     <div class="section">
       <h2>What it does</h2>
       <ul>
-        <li><strong>Web scraping</strong> — reads schema.org event data from configurable sources (Meetup, AllEvents), so one extractor works across many sites.</li>
+        <li><strong>Events</strong> — reads the structured event data that event sites publish, for your town and the towns around it.</li>
+        <li><strong>Places</strong> — adds things you can do any day, like museums, parks and pools, from OpenStreetMap.</li>
         <li><strong>Your location</strong> — device GPS or a typed town/city, resolved via OpenStreetMap.</li>
-        <li><strong>Within range</strong> — every event is geocoded and distance-filtered (up to 40 km).</li>
+        <li><strong>Within range</strong> — everything is distance-filtered, with distance and direction shown.</li>
         <li><strong>Tags</strong> — auto-tagged as <em>possible date</em> / <em>family friendly</em>, with manual overrides that stick.</li>
         <li><strong>Filter</strong> — narrow results live by tag and range.</li>
       </ul>
@@ -116,8 +117,10 @@ python app.py            # opens http://127.0.0.1:5001</code></pre>
 
     <footer>
       <p class="credit">Created by Deltrex</p>
-      <p><a href="https://github.com/TheRealDeltrex/Local-Event-Finder">Source on GitHub</a> · GPL-3.0</p>
+      <p>Version <span data-app-version>—</span> · <a href="https://github.com/TheRealDeltrex/Local-Event-Finder">Source on GitHub</a> · <a href="https://github.com/TheRealDeltrex/Local-Event-Finder/blob/main/CHANGELOG.md">Changelog</a> · GPL-3.0</p>
     </footer>
   </div>
+  <script src="version.js"></script>
+  <script>document.querySelectorAll("[data-app-version]").forEach((n) => (n.textContent = window.LEF_VERSION || "—"));</script>
 </body>
 </html>

@@ -14,6 +14,13 @@ val keystoreProps = Properties().apply {
 }
 val hasReleaseSigning = keystorePropsFile.exists()
 
+// The app version comes from the repo's top-level VERSION file (shared with
+// the Flask app and the browser version). versionCode is derived from it so
+// every release is an upgrade: 1.2.3 -> 10203.
+val appVersion = rootProject.file("../VERSION").readText().trim()
+val appVersionCode = appVersion.split(".").map { it.toInt() }
+    .let { (major, minor, patch) -> major * 10000 + minor * 100 + patch }
+
 android {
     namespace = "com.therealdeltrex.localeventfinder"
     compileSdk = 34
@@ -22,8 +29,8 @@ android {
         applicationId = "com.therealdeltrex.localeventfinder"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersion
     }
 
     signingConfigs {
@@ -59,6 +66,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
@@ -66,6 +74,11 @@ android {
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+}
+
+// Name the APK after the version, e.g. LocalEventFinder-1.1.0-release.apk.
+base {
+    archivesName.set("LocalEventFinder-$appVersion")
 }
 
 dependencies {
