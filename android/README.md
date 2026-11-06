@@ -40,9 +40,18 @@ adb install app/build/outputs/apk/debug/LocalEventFinder-<version>-debug.apk
 
 ### Signed release build
 
+Releases are normally built and signed by GitHub (see
+`.github/workflows/android.yml`), using the signing key stored in the
+repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. Pushing a `vX.Y.Z` tag
+publishes the signed APK as a GitHub release.
+
 The app's version comes from the top-level [`VERSION`](../VERSION) file, so
-there's nothing to change here when you bump it. To build a signed release,
-create `android/keystore.properties` (gitignored, never commit it):
+there's nothing to change here when you bump it.
+
+To sign a release on your own computer instead, create
+`android/keystore.properties` (gitignored, never commit it) next to the
+keystore file:
 
 ```properties
 storeFile=release.jks
