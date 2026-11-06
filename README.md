@@ -79,8 +79,10 @@ To make a release:
 
 1. Add the changes under a new heading in `CHANGELOG.md`.
 2. Run `python scripts/version.py set X.Y.Z` to set the new version everywhere.
-3. Rebuild the signed APK (see [android/README.md](android/README.md)) and copy
-   it to `docs/LocalEventFinder.apk`.
+3. Push a tag named after the version (for example `v1.2.0`). GitHub then
+   builds and signs the APK and publishes it as a
+   [release](https://github.com/TheRealDeltrex/Local-Event-Finder/releases).
+   Copy it to `docs/LocalEventFinder.apk` so the website offers the new one.
 
 ## Keeping the three versions in step
 
