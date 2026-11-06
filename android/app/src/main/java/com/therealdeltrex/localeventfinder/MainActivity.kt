@@ -38,8 +38,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.therealdeltrex.localeventfinder.data.Event
 import com.therealdeltrex.localeventfinder.data.Tagging
-import com.therealdeltrex.localeventfinder.ui.theme.DatePink
-import com.therealdeltrex.localeventfinder.ui.theme.FamilyGreen
+import com.therealdeltrex.localeventfinder.ui.theme.KidsYellow
 import com.therealdeltrex.localeventfinder.ui.theme.LocalEventFinderTheme
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
@@ -77,6 +76,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AppScreen(vm: EventsViewModel, onUseLocation: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -109,7 +109,7 @@ fun AppScreen(vm: EventsViewModel, onUseLocation: () -> Unit) {
             color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
         Text(
-            "Find things to do near you. Pick a spot, set a range, and mark events as date ideas or family friendly.",
+            "Find things to do near you. Pick a spot, set a range, and filter by the kind of thing you're in the mood for.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -167,27 +167,56 @@ fun AppScreen(vm: EventsViewModel, onUseLocation: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
-        // ---- tag filters ----
+        // ---- type filters (coloured like the type tags) ----
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Types", style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = { vm.setAllTypesShown(true) }) { Text("All") }
+            TextButton(onClick = { vm.setAllTypesShown(false) }) { Text("None") }
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
+        ) {
+            Tagging.TYPES.forEach { type ->
+                val shown = type.key !in state.hiddenTypes
+                val color = Color(type.color)
+                FilterChip(
+                    selected = shown,
+                    onClick = { vm.setTypeShown(type.key, !shown) },
+                    label = { Text(type.label) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = color,
+                        selectedLabelColor = Color.White,
+                        selectedLeadingIconColor = Color.White,
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true, selected = shown, borderColor = color,
+                    ),
+                )
+            }
+        }
+
+        // ---- other filters ----
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Tagging.ALL_TAGS.forEach { tag ->
-                FilterChip(
-                    selected = tag in state.filters,
-                    onClick = { vm.toggleFilter(tag, tag !in state.filters) },
-                    label = { Text(Tagging.TAG_LABELS[tag] ?: tag) },
-                )
-            }
             FilterChip(
-                selected = UNTAGGED in state.filters,
-                onClick = { vm.toggleFilter(UNTAGGED, UNTAGGED !in state.filters) },
-                label = { Text("Untagged") },
+                selected = state.onlyKids,
+                onClick = { vm.setOnlyKids(!state.onlyKids) },
+                label = { Text("Only kid friendly") },
             )
             FilterChip(
-                selected = PERMANENT in state.filters,
-                onClick = { vm.toggleFilter(PERMANENT, PERMANENT !in state.filters) },
-                label = { Text("Permanent") },
+                selected = state.showEvents,
+                onClick = { vm.setShowEvents(!state.showEvents) },
+                label = { Text("Events") },
+            )
+            FilterChip(
+                selected = state.showPermanent,
+                onClick = { vm.setShowPermanent(!state.showPermanent) },
+                label = { Text("Permanent places") },
             )
         }
 
@@ -213,7 +242,7 @@ fun AppScreen(vm: EventsViewModel, onUseLocation: () -> Unit) {
         val visible = state.visible
         if (state.events.isNotEmpty() && visible.isEmpty()) {
             Text(
-                "No events match these filters. Widen the range or turn on more tags.",
+                "Nothing matches these filters. Widen the range or turn on more types.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 24.dp).fillMaxWidth(),
             )
@@ -291,10 +320,23 @@ private fun EventCard(ev: Event, onToggleTag: (String) -> Unit) {
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Primary type tag, coloured by type.
+                val type = Tagging.typeInfo(ev.type)
+                Surface(color = Color(type.color), shape = MaterialTheme.shapes.small) {
+                    Text(
+                        type.label,
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    )
+                }
                 Tagging.ALL_TAGS.forEach { tag ->
                     val on = tag in ev.tags
-                    val color = if (tag == Tagging.TAG_DATE) DatePink else FamilyGreen
+                    val color = KidsYellow
                     AssistChip(
                         onClick = { onToggleTag(tag) },
                         label = { Text((if (on) "✓ " else "+ ") + (Tagging.TAG_LABELS[tag] ?: tag)) },

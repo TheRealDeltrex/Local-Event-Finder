@@ -19,8 +19,6 @@ import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
-const val UNTAGGED = "__untagged__"
-const val PERMANENT = "__permanent__"
 
 data class UiState(
     val loading: Boolean = false,
@@ -30,17 +28,20 @@ data class UiState(
     val dayMin: Int = 0,           // date-window start (days from today)
     val dayMax: Int = 14,          // date-window end; two weeks by default
     val viewWindowDays: Int = 14,  // slider span: 14 (2 weeks) or 365 (1 year)
-    val filters: Set<String> = setOf(Tagging.TAG_DATE, Tagging.TAG_FAMILY, UNTAGGED, PERMANENT),
+    val hiddenTypes: Set<String> = emptySet(),  // type keys switched off in the filter
+    val onlyKids: Boolean = false,
+    val showEvents: Boolean = true,
+    val showPermanent: Boolean = true,
     val log: List<String> = emptyList(),
 ) {
-    /** Events after live tag + distance + date + always-open filtering. */
+    /** Events after live type + kid friendly + distance + date + events/places filtering. */
     val visible: List<Event>
         get() = events.filter { ev ->
             val within = (ev.distanceKm ?: Double.MAX_VALUE) <= rangeKm
-            val tagOk = if (ev.tags.isEmpty()) UNTAGGED in filters
-            else ev.tags.any { it in filters }
-            val permanentOk = !ev.permanent || PERMANENT in filters
-            within && tagOk && permanentOk && inDateRange(ev, dayMin, dayMax)
+            val typeOk = ev.type !in hiddenTypes
+            val kidsOk = !onlyKids || Tagging.TAG_KIDS in ev.tags
+            val kindOk = if (ev.permanent) showPermanent else showEvents
+            within && typeOk && kidsOk && kindOk && inDateRange(ev, dayMin, dayMax)
         }
 }
 
@@ -78,7 +79,9 @@ class EventsViewModel(app: Application) : AndroidViewModel(app) {
     private val store = TagStore(app)
     private val overrides: MutableMap<String, TagOverride> = store.loadOverrides()
 
-    private val _state = MutableStateFlow(UiState(rangeKm = store.loadRangeKm()))
+    private val _state = MutableStateFlow(
+        UiState(rangeKm = store.loadRangeKm(), hiddenTypes = store.loadHiddenTypes())
+    )
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     init {
@@ -109,13 +112,23 @@ class EventsViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(viewWindowDays = span, dayMin = 0, dayMax = span) }
     }
 
-    fun toggleFilter(tag: String, on: Boolean) {
-        _state.update {
-            val f = it.filters.toMutableSet()
-            if (on) f.add(tag) else f.remove(tag)
-            it.copy(filters = f)
-        }
+    /** Show or hide one type; hidden types are remembered between launches. */
+    fun setTypeShown(type: String, shown: Boolean) {
+        setHiddenTypes(_state.value.hiddenTypes.let { if (shown) it - type else it + type })
     }
+
+    fun setAllTypesShown(shown: Boolean) {
+        setHiddenTypes(if (shown) emptySet() else Tagging.TYPES.map { it.key }.toSet())
+    }
+
+    private fun setHiddenTypes(hidden: Set<String>) {
+        _state.update { it.copy(hiddenTypes = hidden) }
+        store.saveHiddenTypes(hidden)
+    }
+
+    fun setOnlyKids(on: Boolean) = _state.update { it.copy(onlyKids = on) }
+    fun setShowEvents(on: Boolean) = _state.update { it.copy(showEvents = on) }
+    fun setShowPermanent(on: Boolean) = _state.update { it.copy(showPermanent = on) }
 
     fun searchByName(name: String) {
         val q = name.trim()

@@ -9,8 +9,7 @@ import androidx.compose.ui.graphics.Color
 
 val Ice = Color(0xFF5EB8E0)
 val IceHover = Color(0xFF8AD0F0)
-val DatePink = Color(0xFFE07EA8)
-val FamilyGreen = Color(0xFF7EE0A0)
+val KidsYellow = Color(0xFFFFD54F)
 
 private val DarkColors = darkColorScheme(
     primary = Ice,

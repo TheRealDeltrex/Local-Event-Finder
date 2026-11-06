@@ -10,9 +10,11 @@ The Android version of Local Events Finder. It runs the same search as the
   town/city, resolved with OpenStreetMap / Nominatim.
 - **Range up to 40 km**, with every event geocoded and distance-filtered
   (haversine), shown as straight-line distance.
-- **Tags**: events are auto-tagged *Possible date* / *Family friendly*; tap a
-  chip on any card to override, and the choice is saved in `SharedPreferences`.
-- **Live filtering** by tag chips and a range slider.
+- **Types and tags**: every result gets a colour-coded type (music, park,
+  theatre, … or unknown) and, when it's aimed at children, a *Kid friendly*
+  tag; tap that chip on a card to override, and the choice is saved in
+  `SharedPreferences`.
+- **Live filtering** by type chips, kid friendly, events/places and a range slider.
 
 Everything runs on the phone; the only network calls are to the event sources
 and to OpenStreetMap.
@@ -64,7 +66,7 @@ app/src/main/java/com/therealdeltrex/localeventfinder/
   EventsViewModel.kt     search state, filtering, tag toggling
   data/
     Event.kt             the event record + stable id
-    Tagging.kt           keyword heuristics for "date" / "family" tags
+    Tagging.kt           type and kid-friendly heuristics
     Geo.kt               Nominatim geocoding (throttled + cached) + haversine
     Scraper.kt           JSON-LD Event extraction → geocode → distance → tag
     Sources.kt           default sources + URL templating

@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Local Events Finder — web app</title>
-<meta name="description" content="Run the Local Events Finder in your browser — find nearby events, tagged as date ideas or family friendly." />
+<meta name="description" content="Run the Local Events Finder in your browser — find nearby events and places, tagged by type and kid friendly where they're meant for children." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%8D%3C/text%3E%3C/svg%3E" />
 <link rel="stylesheet" href="webapp.css" />
 </head>
@@ -17,7 +17,7 @@
 
     <header class="hero">
       <h1>📍 Local Events Finder</h1>
-      <p>Find things to do near you. Pick a spot, set a range, and mark events as date ideas or family friendly.</p>
+      <p>Find things to do near you. Pick a spot, set a range, and filter by the kind of thing you're in the mood for.</p>
     </header>
 
     <div class="banner">
@@ -58,12 +58,17 @@
         </label>
       </div>
 
+      <div class="filter-row type-filters">
+        <span class="filter-label">Types:</span>
+        <span id="type-chips" class="chip-group"></span>
+        <button type="button" class="link-btn" id="types-all">All</button>
+        <button type="button" class="link-btn" id="types-none">None</button>
+      </div>
       <div class="filter-row">
         <span class="filter-label">Show:</span>
-        <label class="chip-toggle"><input type="checkbox" class="tag-filter" value="date" checked /><span>Possible date</span></label>
-        <label class="chip-toggle"><input type="checkbox" class="tag-filter" value="family" checked /><span>Family friendly</span></label>
-        <label class="chip-toggle"><input type="checkbox" class="tag-filter" value="__untagged__" checked /><span>Untagged</span></label>
-        <label class="chip-toggle" title="Permanent places like museums, parks and pools"><input type="checkbox" class="tag-filter" value="__permanent__" checked /><span>Permanent</span></label>
+        <label class="chip-toggle" title="Only things actually aimed at children"><input type="checkbox" id="only-kids" /><span>Only kid friendly</span></label>
+        <label class="chip-toggle" title="Scheduled events with a date"><input type="checkbox" id="show-events" checked /><span>Events</span></label>
+        <label class="chip-toggle" title="Permanent places like museums, parks and pools"><input type="checkbox" id="show-permanent" checked /><span>Permanent places</span></label>
       </div>
 
       <p id="status" class="status" role="status"></p>

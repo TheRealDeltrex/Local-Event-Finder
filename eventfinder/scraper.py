@@ -126,6 +126,8 @@ def extract_events(html: str, source_name: str) -> list[Event]:
             seen.add(eid)
             address, locality, lat, lon = _location_fields(node)
             description = _text(node.get("description"))
+            ld = node.get("@type", "")
+            ld_types = [str(x) for x in (ld if isinstance(ld, list) else [ld])]
             events.append(
                 Event(
                     id=eid,
@@ -140,7 +142,8 @@ def extract_events(html: str, source_name: str) -> list[Event]:
                     locality=locality,
                     lat=lat,
                     lon=lon,
-                    auto_tags=tagging.auto_tags(title, description),
+                    type=tagging.event_type(title, description, ld_types, source_name),
+                    auto_tags=tagging.auto_tags(title, description, ld_types),
                 )
             )
     return events
@@ -284,7 +287,8 @@ def _apply_manual(ev: Event, overrides: dict) -> None:
     if entry:
         tags.update(entry.get("add", []))
         tags.difference_update(entry.get("remove", []))
-    ev.tags = sorted(tags)
+    # Old overrides for retired tags ("date", "family") are ignored.
+    ev.tags = sorted(t for t in tags if t in tagging.ALL_TAGS)
 
 
 def _parse_start(start: str) -> Optional[datetime]:
