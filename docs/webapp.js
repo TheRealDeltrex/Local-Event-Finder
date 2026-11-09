@@ -6,12 +6,10 @@
  * Python, and browsers block cross-origin scraping. So this build fetches the
  * source pages through a public CORS proxy, then does the same work the Flask
  * backend does — extract schema.org Event JSON-LD, geocode via OpenStreetMap,
- * distance-filter, tag — entirely client-side. Geocoding (Nominatim) allows
+ * distance-filter, tag by type — entirely client-side. Geocoding (Nominatim) allows
  * browser requests directly. Manual tags + cache live in localStorage.
  */
 
-const TAGS = ["date", "family"];
-const TAG_LABELS = { date: "Possible date", family: "Family friendly" };
 const CORS_PROXY = (url) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
 const NOMINATIM = "https://nominatim.openstreetmap.org";
 
@@ -30,23 +28,112 @@ const SOURCES = [
 ];
 const ALLEVENTS_CATEGORIES = ["music", "theatre", "comedy", "arts", "nightlife"];
 
-const DATE_HINTS = ["date night","romantic","couples","wine","wine tasting","tasting","cocktail","cocktails","speakeasy","rooftop","candlelight","candlelit","dinner","brunch","jazz","live music","concert","acoustic","vinyl","comedy","stand-up","standup","theatre","theater","opera","ballet","gallery","art walk","exhibition","gin","whisky","whiskey","brewery","distillery","tapas","salsa","tango","dance class","sunset","cruise","pottery","paint and sip","quiz night","wine bar"];
-const FAMILY_HINTS = ["family","families","family-friendly","kid","kids","child","children","toddler","toddlers","baby","babies","all ages","all-ages","playground","puppet","storytime","story time","fairy tale","petting zoo","zoo","aquarium","science museum","planetarium","craft","crafts","lego","face painting","bouncy castle","funfair","kinder","familien","familie","spielplatz","märchen","workshop for kids","school holiday","half term","easter egg"];
+// ---- tagging (mirrors eventfinder/tagging.py) ------------------------------
+// Every result gets one primary type (music, park, …, or "unknown") and may get
+// the secondary "kids" tag when it's actually aimed at children.
+const TAGS = ["kids"];
+const TAG_LABELS = { kids: "Kid friendly" };
+// [key, label, colour] — order is the order of the filter chips.
+const TYPES = [
+  ["music", "Music", "#8e24aa"],
+  ["theatre", "Theatre & shows", "#c62828"],
+  ["comedy", "Comedy", "#ef6c00"],
+  ["film", "Film", "#455a64"],
+  ["art", "Art", "#d81b60"],
+  ["museum", "Museum & history", "#6d4c41"],
+  ["park", "Park & nature", "#2e7d32"],
+  ["water", "Swimming & beach", "#0288d1"],
+  ["animals", "Zoo & animals", "#00897b"],
+  ["sport", "Sport", "#3949ab"],
+  ["play", "Playground", "#f4511e"],
+  ["attraction", "Attraction", "#c0a000"],
+  ["food", "Food & drink", "#a1541b"],
+  ["nightlife", "Nightlife", "#5e35b1"],
+  ["festival", "Festival & market", "#e91e63"],
+  ["workshop", "Class & talk", "#00838f"],
+  ["community", "Meetup & social", "#607d8b"],
+  ["unknown", "Unknown", "#757575"],
+];
+const TYPE_BY_KEY = Object.fromEntries(TYPES.map(([key, label, color]) => [key, { key, label, color }]));
+// schema.org event @type -> type (plain "Event" says nothing).
+const LD_TYPES = {
+  "MusicEvent": "music",
+  "TheaterEvent": "theatre",
+  "DanceEvent": "theatre",
+  "ComedyEvent": "comedy",
+  "ScreeningEvent": "film",
+  "VisualArtsEvent": "art",
+  "ExhibitionEvent": "art",
+  "SportsEvent": "sport",
+  "FoodEvent": "food",
+  "Festival": "festival",
+  "SaleEvent": "festival",
+  "EducationEvent": "workshop",
+  "LiteraryEvent": "workshop",
+  "SocialEvent": "community",
+};
+// AllEvents category feed -> type.
+const SOURCE_TYPES = {
+  "music": "music",
+  "theatre": "theatre",
+  "comedy": "comedy",
+  "arts": "art",
+  "nightlife": "nightlife",
+};
+// Whole-word keyword hints per type; the one appearing first in the text wins.
+const TYPE_HINTS = {
+  music: ["concert","concerts","live music","gig","band","bands","jazz","blues","orchestra","symphony","philharmonic","choir","recital","acoustic","open mic","singer","songwriter","rock","punk","metal","hip hop","rap","folk","musik","konzert","chor","music"],
+  theatre: ["theatre","theater","musical","opera","ballet","drama","cabaret","circus","magic show","dance show","puppet","puppet show","pantomime","oper","schauspiel","zirkus","theaterstück"],
+  comedy: ["comedy","stand-up","standup","stand up","comedian","comedians","improv","kabarett","satire"],
+  film: ["film","films","movie","movies","cinema","screening","open air cinema","kino","filmabend"],
+  art: ["art","arts","gallery","exhibition","painting","sculpture","art walk","vernissage","photography","paint and sip","ausstellung","kunst","galerie"],
+  museum: ["museum","museums","heritage","history tour","historic","castle","museumsnacht","burg","schloss"],
+  park: ["park","garden","gardens","hike","hiking","nature walk","forest","botanical","nature","wandern","wanderung","naturpark"],
+  water: ["swim","swimming","pool","beach","lido","schwimmen","strand","freibad","hallenbad"],
+  animals: ["zoo","aquarium","petting zoo","wildlife","animals","farm animals","tierpark","wildpark"],
+  sport: ["run","running","marathon","5k","10k","football","soccer","yoga","fitness","cycling","bike ride","climbing","bouldering","tennis","match","tournament","volleyball","basketball","hockey","handball","sport","sports","lauf","fußball","turnier"],
+  play: ["playground","soft play","bouncy castle","spielplatz","play area"],
+  attraction: ["theme park","funfair","amusement","escape room","mini golf","minigolf","kirmes","freizeitpark"],
+  food: ["food","dinner","brunch","breakfast","tasting","wine","wine tasting","beer","brewery","distillery","whisky","whiskey","gin","street food","bbq","barbecue","coffee","cocktail","cocktails","supper club","weinprobe","essen"],
+  nightlife: ["club night","dance party","afterparty","dj","rave","techno","house music","nightlife","disco","pub crawl","karaoke","quiz night","pub quiz","salsa night","silent disco"],
+  festival: ["festival","fest","market","flea market","christmas market","carnival","parade","fair","street party","markt","flohmarkt","weihnachtsmarkt","volksfest","stadtfest"],
+  workshop: ["workshop","class","classes","course","lesson","lessons","seminar","lecture","talk","tutorial","bootcamp","masterclass","pottery","craft","crafts","kurs","vortrag","reading","lesung"],
+  community: ["meetup","meet-up","networking","social","meet and greet","language exchange","board games","board game","stammtisch","volunteer","volunteering","community","get together"],
+};
+// Things actually aimed at children, not just "fine to bring kids to".
+const KID_HINTS = ["kids","kid","children","child","childrens","children's","toddler","toddlers","baby","babies","little ones","junior","juniors","family day","family fun","family-friendly","family friendly","for families","puppet","puppet show","storytime","story time","fairy tale","petting zoo","face painting","bouncy castle","lego","soft play","playground","school holiday","school holidays","half term","easter egg hunt","kinder","kinderfest","kindertheater","familienfest","spielplatz","märchen","kinderprogramm"];
 
-function buildHintRegex(hints) {
+function buildHintRegex(hints, flags = "i") {
   const alt = hints.slice().sort((a, b) => b.length - a.length)
     .map((h) => h.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&")).join("|");
-  return new RegExp("(?<!\\w)(?:" + alt + ")(?!\\w)", "i");
+  return new RegExp("(?<!\\w)(?:" + alt + ")(?!\\w)", flags);
 }
-const DATE_RE = buildHintRegex(DATE_HINTS);
-const FAMILY_RE = buildHintRegex(FAMILY_HINTS);
+const TYPE_RES = Object.fromEntries(Object.entries(TYPE_HINTS).map(([k, h]) => [k, buildHintRegex(h)]));
+const KID_RE = buildHintRegex(KID_HINTS);
+const ldName = (x) => String(x).split("/").pop();
 
-function autoTags(title, description) {
-  const text = `${title} \n ${description || ""}`;
-  const t = [];
-  if (DATE_RE.test(text)) t.push("date");
-  if (FAMILY_RE.test(text)) t.push("family");
-  return t;
+function typeFromText(text) {
+  let best = null;
+  TYPES.forEach(([key], order) => {
+    const rx = TYPE_RES[key]; if (!rx) return;
+    const m = rx.exec((text || "").toLowerCase());
+    if (m && (!best || m.index < best[0] || (m.index === best[0] && order < best[1]))) best = [m.index, order, key];
+  });
+  return best ? best[2] : null;
+}
+function sourceType(source) {
+  const m = /[·/]\s*(\w+)\)?\s*$/.exec(source || "");
+  return m ? SOURCE_TYPES[m[1].toLowerCase()] || null : null;
+}
+function eventType(title, description, ldTypes, source) {
+  for (const x of ldTypes || []) if (LD_TYPES[ldName(x)]) return LD_TYPES[ldName(x)];
+  return typeFromText(title) || sourceType(source) || typeFromText(description)
+    || (/^meetup/i.test(source || "") ? "community" : null) || "unknown";
+}
+function autoTags(title, description, ldTypes) {
+  const kids = (ldTypes || []).some((x) => ldName(x) === "ChildrensEvent")
+    || KID_RE.test(`${title} \n ${description || ""}`);
+  return kids ? ["kids"] : [];
 }
 
 // ---- persistence ----------------------------------------------------------
@@ -182,9 +269,11 @@ function extractEvents(html, sourceName) {
       const url = txt(node.url), start = txt(node.startDate), id = eid(url, title, start);
       if (seen.has(id)) continue; seen.add(id);
       const lf = locFields(node), description = txt(node.description);
+      const ldTypes = [].concat(node["@type"] || []).map(String);
       out.push({ id, title, url, source: sourceName, description, start,
         end: txt(node.endDate), image: txt(node.image), address: lf.address, locality: lf.locality,
-        lat: lf.lat, lon: lf.lon, autoTags: autoTags(title, description), tags: [] });
+        lat: lf.lat, lon: lf.lon, type: eventType(title, description, ldTypes, sourceName),
+        autoTags: autoTags(title, description, ldTypes), tags: [] });
     }
   });
   return out;
@@ -254,7 +343,7 @@ function effectiveTags(ev) {
   const t = new Set(ev.autoTags);
   const ov = store.overrides[ev.id];
   if (ov) { (ov.add || []).forEach((x) => t.add(x)); (ov.remove || []).forEach((x) => t.delete(x)); }
-  return [...t];
+  return [...t].filter((x) => TAGS.includes(x));   // drops retired "date"/"family" overrides
 }
 
 // ---- permanent places (OpenStreetMap / Overpass, CORS-enabled) ------------
@@ -265,23 +354,38 @@ const OVERPASS = [
   "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ];
 const POI_KEYS = ["tourism", "leisure", "amenity", "historic", "natural"];
-// "key|value": [label, tags]
+// "key|value": [label, type, kid friendly] — kid friendly only for places
+// actually aimed at children (a playground, not a park).
 const POI_CATS = {
-  "tourism|museum": ["Museum", ["family"]], "tourism|gallery": ["Gallery", ["date"]],
-  "tourism|zoo": ["Zoo", ["family"]], "tourism|theme_park": ["Theme park", ["family"]],
-  "tourism|aquarium": ["Aquarium", ["family"]], "tourism|attraction": ["Attraction", []],
-  "tourism|viewpoint": ["Viewpoint", ["date"]], "tourism|artwork": ["Public art", ["date"]],
-  "leisure|park": ["Park", ["family"]], "leisure|garden": ["Garden", ["date"]],
-  "leisure|nature_reserve": ["Nature reserve", []], "leisure|water_park": ["Water park", ["family"]],
-  "leisure|miniature_golf": ["Mini golf", ["family"]], "leisure|golf_course": ["Golf course", []],
-  "leisure|sports_centre": ["Sports centre", ["family"]], "leisure|swimming_pool": ["Swimming pool", ["family"]],
-  "leisure|bathing_place": ["Bathing spot", ["family"]], "leisure|horse_riding": ["Horse riding", ["family"]],
-  "leisure|playground": ["Playground", ["family"]], "leisure|bird_hide": ["Bird hide", ["date"]],
-  "amenity|cinema": ["Cinema", ["date"]], "amenity|theatre": ["Theatre", ["date"]],
-  "amenity|arts_centre": ["Arts centre", ["date"]], "amenity|public_bath": ["Swimming pool", ["family"]],
-  "historic|castle": ["Castle", ["date"]], "historic|monument": ["Monument", []],
-  "historic|memorial": ["Memorial", []], "historic|ruins": ["Ruins", ["date"]],
-  "natural|beach": ["Beach", ["family"]],
+  "tourism|museum": ["Museum", "museum", false],
+  "tourism|gallery": ["Gallery", "art", false],
+  "tourism|zoo": ["Zoo", "animals", true],
+  "tourism|theme_park": ["Theme park", "attraction", true],
+  "tourism|aquarium": ["Aquarium", "animals", true],
+  "tourism|attraction": ["Attraction", "attraction", false],
+  "tourism|viewpoint": ["Viewpoint", "park", false],
+  "tourism|artwork": ["Public art", "art", false],
+  "leisure|park": ["Park", "park", false],
+  "leisure|garden": ["Garden", "park", false],
+  "leisure|nature_reserve": ["Nature reserve", "park", false],
+  "leisure|water_park": ["Water park", "water", true],
+  "leisure|miniature_golf": ["Mini golf", "attraction", false],
+  "leisure|golf_course": ["Golf course", "sport", false],
+  "leisure|sports_centre": ["Sports centre", "sport", false],
+  "leisure|swimming_pool": ["Swimming pool", "water", false],
+  "leisure|bathing_place": ["Bathing spot", "water", false],
+  "leisure|horse_riding": ["Horse riding", "sport", false],
+  "leisure|playground": ["Playground", "play", true],
+  "leisure|bird_hide": ["Bird hide", "park", false],
+  "amenity|cinema": ["Cinema", "film", false],
+  "amenity|theatre": ["Theatre", "theatre", false],
+  "amenity|arts_centre": ["Arts centre", "art", false],
+  "amenity|public_bath": ["Swimming pool", "water", false],
+  "historic|castle": ["Castle", "museum", false],
+  "historic|monument": ["Monument", "museum", false],
+  "historic|memorial": ["Memorial", "museum", false],
+  "historic|ruins": ["Ruins", "museum", false],
+  "natural|beach": ["Beach", "water", false],
 };
 function overpassQuery(lat, lon, r) {
   // nwr = nodes+ways+relations (many attractions are areas, e.g. the labyrinth);
@@ -294,10 +398,11 @@ function overpassQuery(lat, lon, r) {
 }
 function catOf(tags) {
   // Public pools are tagged inconsistently — label any of them "Swimming pool".
+  // Water parks keep their own label (they're aimed at kids).
+  if (tags.leisure === "water_park") return POI_CATS["leisure|water_park"];
   const sport = (tags.sport || "").toLowerCase();
-  if (sport.includes("swimming") || tags.leisure === "swimming_pool" ||
-      tags.leisure === "water_park" || tags.amenity === "public_bath") {
-    return ["Swimming pool", ["family"]];
+  if (sport.includes("swimming") || tags.leisure === "swimming_pool" || tags.amenity === "public_bath") {
+    return ["Swimming pool", "water", false];
   }
   for (const key of POI_KEYS) {
     const v = tags[key]; if (v && POI_CATS[`${key}|${v}`]) return POI_CATS[`${key}|${v}`];
@@ -351,7 +456,7 @@ async function fetchPlaces(lat, lon, rangeKm) {
     const url = tags.website || tags["contact:website"] || `https://www.openstreetmap.org/${el.type}/${el.id}`;
     out.push({ id: "poi-" + el.type + "-" + el.id, title: name, url, source: "OpenStreetMap",
       description: cat[0], permanent: true, category: cat[0], start: "", hours: tags.opening_hours || "",
-      locality: tags["addr:city"] || "", lat: +plat, lon: +plon, autoTags: [...cat[1]], tags: [] });
+      locality: tags["addr:city"] || "", lat: +plat, lon: +plon, type: cat[1], autoTags: cat[2] ? ["kids"] : [], tags: [] });
   }
   // nearest first, then cap — so a close area is never truncated away
   out.sort((a, b) => haversine(lat, lon, a.lat, a.lon) - haversine(lat, lon, b.lat, b.lon));
@@ -389,7 +494,7 @@ function makeSampleEvents(place) {
       description: s.d, start: when.toISOString(),
       address: "", locality: place.city || place.label.split(",")[0],
       lat: place.lat + dLat, lon: place.lon + dLon,
-      autoTags: autoTags(s.t, s.d), tags: [],
+      type: eventType(s.t, s.d, [], "Sample"), autoTags: autoTags(s.t, s.d), tags: [],
     };
   });
 }
@@ -492,7 +597,33 @@ function mapsUrl(ev) {
     return `https://www.google.com/maps/search/?api=1&query=${ev.lat}%2C${ev.lon}`;
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.title)}`;
 }
-function activeFilters() { const on = new Set(); document.querySelectorAll(".tag-filter:checked").forEach((c) => on.add(c.value)); return on; }
+function activeFilters() {
+  const types = new Set();
+  document.querySelectorAll(".type-filter:checked").forEach((c) => types.add(c.value));
+  return { types, onlyKids: el("#only-kids").checked, events: el("#show-events").checked, permanent: el("#show-permanent").checked };
+}
+// Type filter chips, built from TYPES; switched-off types are remembered.
+const TYPE_FILTER_KEY = "lef_hidden_types";
+function saveTypeFilter() {
+  const hidden = [...document.querySelectorAll(".type-filter")].filter((c) => !c.checked).map((c) => c.value);
+  try { localStorage.setItem(TYPE_FILTER_KEY, JSON.stringify(hidden)); } catch (e) { /* ignore */ }
+}
+function buildTypeFilters() {
+  let hidden = [];
+  try { hidden = JSON.parse(localStorage.getItem(TYPE_FILTER_KEY) || "[]"); } catch (e) { /* ignore */ }
+  const box = el("#type-chips");
+  for (const [key, label, color] of TYPES) {
+    const chip = document.createElement("label");
+    chip.className = "chip-toggle type-chip"; chip.style.setProperty("--type-color", color);
+    chip.innerHTML = `<input type="checkbox" class="type-filter" value="${key}" ${hidden.includes(key) ? "" : "checked"} /><span>${esc(label)}</span>`;
+    chip.querySelector("input").addEventListener("change", () => { saveTypeFilter(); render(); });
+    box.appendChild(chip);
+  }
+}
+function setAllTypes(on) {
+  document.querySelectorAll(".type-filter").forEach((c) => { c.checked = on; });
+  saveTypeFilter(); render();
+}
 
 // ---- date range (dual slider, day offsets within the 2-week window) ----
 function dayOffset(iso) {
@@ -543,14 +674,17 @@ function render() {
   const shown = allEvents.filter((ev) => {
     if (ev.distance_km != null && ev.distance_km > maxR) return false;
     if (!inDateRange(ev)) return false;
-    if (ev.permanent && !filters.has("__permanent__")) return false;
-    if (!ev.tags.length) return filters.has("__untagged__");
-    return ev.tags.some((t) => filters.has(t));
+    if (ev.permanent ? !filters.permanent : !filters.events) return false;
+    if (!filters.types.has(ev.type || "unknown")) return false;
+    if (filters.onlyKids && !ev.tags.includes("kids")) return false;
+    return true;
   });
   if (!allEvents.length) return;
-  if (!shown.length) { box.innerHTML = '<p class="empty">Nothing matches these filters. Widen the distance or date range, or turn on more tags.</p>'; return; }
+  if (!shown.length) { box.innerHTML = '<p class="empty">Nothing matches these filters. Widen the distance or date range, or turn on more types.</p>'; return; }
   for (const ev of shown) {
     const card = document.createElement("article"); card.className = "card event";
+    const type = TYPE_BY_KEY[ev.type] || TYPE_BY_KEY.unknown;
+    card.style.setProperty("--type-color", type.color);
     const whenText = ev.permanent
       ? `${ev.category || "Place"} · ${ev.hours ? prettyHours(ev.hours) : "permanent"}`
       : fmtWhenRange(ev.start, ev.end);
@@ -560,7 +694,7 @@ function render() {
       <p class="event-meta"><span>${esc(whenText)}</span><span class="dot">·</span>
         <a class="event-dist" target="_blank" rel="noopener" title="Open in Google Maps" href="${esc(mapsUrl(ev))}">${ev.distance_km} km${ev.direction ? " " + esc(ev.direction) : ""}</a>${ev.locality ? `<span>· ${esc(ev.locality)}</span>` : ""}</p>
       ${descText ? `<p class="event-desc">${esc(descText)}</p>` : ""}
-    </div><div class="event-tags"></div>`;
+    </div><div class="event-tags"><span class="type-tag">${esc(type.label)}</span></div>`;
     const tagWrap = card.querySelector(".event-tags");
     for (const tag of TAGS) {
       const on = ev.tags.includes(tag);
@@ -626,7 +760,10 @@ el("#btn-geo").onclick = () => {
     { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
 };
 el("#range").addEventListener("input", () => { el("#range-val").textContent = el("#range").value; render(); });
-document.querySelectorAll(".tag-filter").forEach((c) => c.addEventListener("change", render));
+buildTypeFilters();
+el("#types-all").onclick = () => setAllTypes(true);
+el("#types-none").onclick = () => setAllTypes(false);
+["#only-kids", "#show-events", "#show-permanent"].forEach((id) => el(id).addEventListener("change", render));
 
 function onDaySlide(e) {
   const mn = el("#day-min"), mx = el("#day-max");

@@ -9,6 +9,25 @@ numbers follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-06
+
+### Added
+- Every event and place now gets a colour-coded type tag, such as Music,
+  Theatre & shows, Park & nature, Swimming & beach or Food & drink, and
+  "Unknown" when the type can't be worked out.
+- A type filter: show or hide each type of event and place, with All and None
+  shortcuts. The choice is remembered.
+- A "Kid friendly" tag for things actually aimed at children (playgrounds, zoos,
+  puppet shows, kids' workshops…), but not for places that are merely fine for
+  kids, like parks. You can still switch it on or off by hand, and an "Only kid
+  friendly" filter shows just those.
+- Separate "Events" and "Permanent places" switches.
+- Tests for the tagging rules.
+
+### Removed
+- The "Possible date" and "Family friendly" tags and their filters. Manual
+  choices made for them are ignored.
+
 ## [1.1.0] - 2026-11-06
 
 ### Added

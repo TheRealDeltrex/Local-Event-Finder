@@ -125,11 +125,12 @@ class Scraper(private val client: OkHttpClient, private val geo: Geo) {
         }
     }
 
-    private fun isEvent(node: JSONObject): Boolean {
-        val t = node.opt("@type") ?: return false
-        val types = if (t is JSONArray) (0 until t.length()).map { t.getString(it) } else listOf(t.toString())
-        return types.any { it.contains("Event") }
+    private fun ldTypesOf(node: JSONObject): List<String> {
+        val t = node.opt("@type") ?: return emptyList()
+        return if (t is JSONArray) (0 until t.length()).map { t.optString(it) } else listOf(t.toString())
     }
+
+    private fun isEvent(node: JSONObject): Boolean = ldTypesOf(node).any { it.contains("Event") }
 
     private fun text(value: Any?): String {
         val v = when (value) {
@@ -208,6 +209,7 @@ class Scraper(private val client: OkHttpClient, private val geo: Geo) {
                 if (!seen.add(eid)) continue
                 val loc = locationFields(node)
                 val description = text(node.opt("description"))
+                val ldTypes = ldTypesOf(node)
                 events.add(
                     Event(
                         id = eid,
@@ -222,7 +224,8 @@ class Scraper(private val client: OkHttpClient, private val geo: Geo) {
                         locality = loc.locality,
                         lat = loc.lat,
                         lon = loc.lon,
-                        autoTags = Tagging.autoTags(title, description),
+                        type = Tagging.eventType(title, description, ldTypes, sourceName),
+                        autoTags = Tagging.autoTags(title, description, ldTypes),
                     )
                 )
             }
@@ -346,6 +349,6 @@ class Scraper(private val client: OkHttpClient, private val geo: Geo) {
             tags.addAll(override.add)
             tags.removeAll(override.remove)
         }
-        return tags
+        return tags.filterTo(mutableSetOf()) { it in Tagging.ALL_TAGS }  // drops retired "date"/"family"
     }
 }

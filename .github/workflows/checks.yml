@@ -34,5 +34,7 @@ jobs:
           PY
         env:
           EVENTFINDER_DATA: ${{ runner.temp }}/lef-data
+      - name: Tagging tests
+        run: python -m unittest discover -s tests -v
       - name: Browser version parses
         run: node --check docs/webapp.js
