@@ -1,7 +1,7 @@
 # 📍 Local Event Finder — Android
 
-A native Android port of the Local Events Finder. Same idea, same pipeline as
-the [web app](../README.md), rebuilt in Kotlin + Jetpack Compose:
+The Android version of Local Events Finder. It runs the same search as the
+[local web app](../README.md), rebuilt in Kotlin + Jetpack Compose:
 
 - **Web scraping** of schema.org `Event` JSON-LD from configurable sources
   (Meetup + AllEvents by default) using OkHttp + Jsoup — one extractor across
@@ -28,19 +28,42 @@ let it sync, and click ▶ on a device/emulator (Android 8.0 / API 26+).
 cd android
 # point the build at your SDK (or set ANDROID_HOME)
 echo "sdk.dir=$HOME/Android/Sdk" > local.properties
-./gradlew :app:assembleDebug          # builds app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:assembleDebug          # builds app/build/outputs/apk/debug/LocalEventFinder-<version>-debug.apk
 ./gradlew installDebug                # install onto a connected device/emulator
 ```
 
 To install the APK by hand:
 
 ```bash
-adb install app/build/outputs/apk/debug/app-debug.apk
+adb install app/build/outputs/apk/debug/LocalEventFinder-<version>-debug.apk
 ```
 
-> This project was compiled successfully with Android Gradle Plugin 8.5.2,
-> Kotlin 1.9.24, Gradle 8.14.3, and `compileSdk` 34. The debug build is
-> unsigned; sign a release build before publishing.
+### Signed release build
+
+Releases are normally built and signed by GitHub (see
+`.github/workflows/android.yml`), using the signing key stored in the
+repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. Pushing a `vX.Y.Z` tag
+publishes the signed APK as a GitHub release.
+
+The app's version comes from the top-level [`VERSION`](../VERSION) file, so
+there's nothing to change here when you bump it.
+
+To sign a release on your own computer instead, create
+`android/keystore.properties` (gitignored, never commit it) next to the
+keystore file:
+
+```properties
+storeFile=release.jks
+storePassword=…
+keyAlias=…
+keyPassword=…
+```
+
+Then run `./gradlew :app:assembleRelease`. The APK is written to
+`app/build/outputs/apk/release/LocalEventFinder-<version>-release.apk`; copy it
+to `docs/LocalEventFinder.apk` to publish it on the website. Always sign with
+the same key, or phones with the app installed can't update it.
 
 ## Project layout
 

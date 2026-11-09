@@ -2,115 +2,104 @@
 
 ### 🌐 [**Open the web app & download the Android app →**](https://therealdeltrex.github.io/Local-Event-Finder/)
 
-_Live at **https://therealdeltrex.github.io/Local-Event-Finder/** — run it in your browser or grab the signed APK._
+Find things to do near you. Pick a place (or use your location), choose how far
+you're willing to go, and browse what's on: scheduled events and places you can
+visit any day. Everything is tagged as a **possible date** or **family
+friendly**, and you can filter by tag, distance and date.
 
----
+## Ways to use it
 
-Find things to do near you. Point it at your area, set a range (up to 40 km),
-and browse local events — each one tagged as a **possible date** or **family
-friendly**, and filterable by tag and distance.
+| Version | Best for | How to get it |
+| --- | --- | --- |
+| **Android app** | Everyday use on your phone | Download the APK from the [website](https://therealdeltrex.github.io/Local-Event-Finder/) |
+| **Local web app** | The most complete results on a computer | Run it yourself (see below) |
+| **Browser version** | A quick try with nothing to install | Open the [website](https://therealdeltrex.github.io/Local-Event-Finder/) |
 
-It runs entirely on your own machine. The only outbound calls are to the event
-sources it scrapes and to OpenStreetMap for turning place names into
-coordinates. Your searches and your tag choices stay in local files.
+All three do the same search and share the same version number. The browser
+version has one built-in limitation: browsers can't read some event sites
+directly, so it may find fewer scheduled events than the other two.
 
-> **📱 Android app:** there's a native Kotlin/Jetpack Compose version in
-> [`android/`](android/) with the same features (device GPS, scraping, tagging,
-> filtering). See [android/README.md](android/README.md) to build it.
->
-> **🌐 Landing page + APK download:** the [**live site**](https://therealdeltrex.github.io/Local-Event-Finder/)
-> (served from [`docs/`](docs/) via GitHub Pages) runs the web version in the
-> browser and offers the signed Android APK
-> ([`docs/LocalEventFinder.apk`](docs/LocalEventFinder.apk)).
+## How it works
 
-## What it does
+1. **Where you are.** Your device location or a typed town is turned into
+   coordinates using OpenStreetMap.
+2. **What's on.** The app reads the structured event data that event sites
+   publish for search engines (schema.org `Event`), for your town and the towns
+   around it. Because it reads a standard format rather than one site's layout,
+   new sources can be added without changing the pipeline.
+3. **What's always there.** It adds places like museums, parks, pools and
+   viewpoints from OpenStreetMap, with opening hours where known.
+4. **What's close enough.** Everything is located, measured from you (distance
+   and compass direction), and dropped if it's out of range.
+5. **What it's good for.** Each result is tagged automatically from its
+   description. You can add or remove a tag by hand, and your choice is kept the
+   next time you search.
 
-- **Web scraping** — pulls events from configurable sources. Instead of
-  screen-scraping one site's fragile HTML, it reads the structured
-  [schema.org `Event`](https://schema.org/Event) data (JSON-LD) that most event
-  sites already publish for search engines, so the same extractor works across
-  many sites. Ships with two sources enabled (Meetup and AllEvents); add your
-  own in Settings.
-- **Your location, your way** — click **Use my location** to use the device's
-  GPS (browser geolocation), or just **type a town or city**.
-- **40 km range** — every event is geocoded and its straight-line distance from
-  you is shown. Anything past the range is dropped.
-- **Tags** — each event is auto-tagged as *Possible date* and/or *Family
-  friendly* from keyword heuristics. Click a tag chip on any card to add or
-  remove it by hand; your override is saved and survives re-scrapes.
-- **Filter** — filter the results live by **tag** (checkboxes) and **range**
-  (slider) without re-fetching.
+No accounts and no API keys. Your searches and tags stay on your device.
 
-## Run it
+## Run the local web app
+
+You need Python 3.10 or newer.
 
 ```bash
-cd event-finder
-python3 -m venv .venv && source .venv/bin/activate    # optional but recommended
+git clone https://github.com/TheRealDeltrex/Local-Event-Finder
+cd Local-Event-Finder
+python3 -m venv .venv && source .venv/bin/activate   # optional
 pip install -r requirements.txt
 python app.py
 ```
 
-It opens in your browser at <http://127.0.0.1:5001>. Type a place (or click
-*Use my location*), press **Search**, and browse.
+It opens in your browser at <http://127.0.0.1:5001>.
 
-### Environment variables
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `PORT` | `5001` | Port to serve on |
+| `EVENTFINDER_DATA` | `~/Documents/LocalEventsFinder` | Folder for the cache, your tags and settings |
+| `EVENTFINDER_OPEN` | `1` | Set to `0` to not open a browser on start |
+| `FLASK_DEBUG` | *(unset)* | Set to turn on Flask debug mode |
 
-| Variable            | Default                                   | Purpose                                  |
-| ------------------- | ----------------------------------------- | ---------------------------------------- |
-| `PORT`              | `5001`                                    | Port to serve on                         |
-| `EVENTFINDER_DATA`  | `~/Documents/LocalEventsFinder`           | Where cache / tags / settings are stored |
-| `EVENTFINDER_OPEN`  | `1`                                       | Set to `0` to not auto-open the browser  |
-| `FLASK_DEBUG`       | *(unset)*                                 | Set to enable Flask debug mode           |
+To build the Android app yourself, see [android/README.md](android/README.md).
 
-## Where your data goes
+## Repository layout
 
-Under `EVENTFINDER_DATA` (by default `~/Documents/LocalEventsFinder`):
+| Folder | Contents |
+| --- | --- |
+| `eventfinder/`, `app.py`, `templates/`, `static/` | Local web app (Python + Flask) |
+| `android/` | Android app (Kotlin + Jetpack Compose) |
+| `docs/` | Website, browser version and the APK download (served by GitHub Pages) |
+| `scripts/` | Version and consistency tools |
 
-- `geocode_cache.json` — remembered address → coordinate lookups (keeps us
-  polite to OpenStreetMap)
-- `manual_tags.json` — your per-event tag overrides
-- `settings.json` — your last location, range, and event sources
+## Versions and releases
 
-## Adding event sources
+There is one version number for the whole project, in the [`VERSION`](VERSION)
+file, and every version shows it in its footer. What changed in each release is
+in the [changelog](CHANGELOG.md).
 
-Sources live in `settings.json` (seeded from `eventfinder/store.py`). Each is a
-name + URL template. The template can use these placeholders, filled from your
-resolved search location:
+To make a release:
 
-- `{city}` — city name, URL-encoded (e.g. `Cologne`)
-- `{city_lower}` — lowercased, hyphenated slug (e.g. `cologne`)
-- `{cc}` — ISO country code (e.g. `de`)
-- `{label}` — the full resolved location label
+1. Add the changes under a new heading in `CHANGELOG.md`.
+2. Run `python scripts/version.py set X.Y.Z` to set the new version everywhere.
+3. Push a tag named after the version (for example `v1.2.0`). GitHub then
+   builds and signs the APK and publishes it as a
+   [release](https://github.com/TheRealDeltrex/Local-Event-Finder/releases).
+   Copy it to `docs/LocalEventFinder.apk` so the website offers the new one.
 
-Any page that publishes schema.org `Event` JSON-LD will work. Offline events
-with a geocodable address are kept; online-only events are skipped (they have no
-distance).
+## Keeping the three versions in step
 
-## How it fits together
+Each version has its own copy of the search logic, so a change to one has to be
+made in all three. `python scripts/check_parity.py` compares them (keywords,
+place types, sources and search features) and fails if they've drifted, and
+`python scripts/version.py check` confirms the version is set everywhere. Both
+run automatically on every pull request.
 
-```
-app.py                 Flask routes: page + /api/search, tag toggle, settings
-eventfinder/
-  geo.py               OpenStreetMap geocoding + reverse + haversine (cached, throttled)
-  scraper.py           JSON-LD Event extraction → geocode → distance → tag
-  tagging.py           keyword heuristics for "date" / "family" tags
-  store.py             local JSON persistence (cache, tags, settings)
-  models.py            the Event record
-templates/index.html   the UI
-static/app.js          search, filtering, tag toggling
-static/style.css       styling
-```
+## Good to know
 
-## Notes & limits
-
-- Scraping depends on each source keeping its structured data — if a site
-  changes, that source may return fewer events. The pluggable design means you
-  can add or swap sources without touching the pipeline.
-- Geocoding uses the public OpenStreetMap Nominatim service, which asks for a
-  descriptive User-Agent and ~1 request/second; results are cached on disk to
-  stay well within that.
-- Distances are straight-line ("as the crow flies"), not driving distance.
+- Results depend on what event sites publish. If a site changes, it may return
+  fewer events until the source is updated.
+- Distances are straight-line, not travel distance.
+- OpenStreetMap's public services are shared and rate-limited, so a search can
+  take a minute or two. Lookups are cached to keep later searches faster.
 
 ## License
 
-Released under the **GNU General Public License v3.0** — see [LICENSE](LICENSE).
+Released under the **GNU General Public License v3.0**. See [LICENSE](LICENSE).
