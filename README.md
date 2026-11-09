@@ -84,7 +84,7 @@ To make a release:
 3. Push a tag named after the version (for example `v1.2.0`). GitHub then
    builds and signs the APK and publishes it as a
    [release](https://github.com/TheRealDeltrex/Local-Event-Finder/releases).
-   Copy it to `docs/LocalEventFinder.apk` so the website offers the new one.
+   The website's download button always points at the latest release.
 
 ## Keeping the three versions in step
 

@@ -9,7 +9,14 @@ numbers follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [1.2.0] - 2026-11-06
+## [1.2.0] - 2026-11-09
+
+### Changed
+- The Android app is now built and signed by GitHub and published as a
+  [GitHub release](https://github.com/TheRealDeltrex/Local-Event-Finder/releases);
+  the website's download button always fetches the latest one.
+- The Android app has a new signing key. If you installed an earlier version,
+  uninstall it once before installing this one.
 
 ### Added
 - Every event and place now gets a colour-coded type tag, such as Music,
