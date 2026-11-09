@@ -3,126 +3,270 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Local Events Finder</title>
-<meta name="description" content="Find things to do near you within range — tagged by type (music, parks, theatre, …) and kid friendly. Run it in your browser or download the Android app." />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%8D%3C/text%3E%3C/svg%3E" />
+<title>Local Events Finder — use it in your browser or on Android</title>
+<meta name="description" content="Find things to do near you: local events and places within range, tagged by type (music, parks, theatre, …) and kid friendly. Use it in your browser, on Android or on your own computer. No account, no API keys." />
+<link rel="icon" type="image/png" href="favicon.png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<meta property="og:title" content="Local Events Finder" />
+<meta property="og:description" content="Find events and places near you, tagged by type and kid friendly. Use it in your browser or on Android. No account, no API keys." />
+<meta property="og:image" content="https://therealdeltrex.github.io/Local-Event-Finder/logo.png" />
+<meta name="twitter:card" content="summary_large_image" />
 <style>
+  /* Colours are taken from the logo: a night-blue square with warm lantern and brass tones. */
   :root {
-    --bg:#0b1220; --bg-deep:#070c14; --surface:#121c2e; --surface-2:#1a2740;
-    --border:#2a3d5c; --text:#e8eef8; --muted:#8fa3c1; --accent:#5eb8e0;
-    --accent-hover:#8ad0f0; --kids:#ffd54f;
-    --font:"Segoe UI",system-ui,-apple-system,sans-serif;
+    --bg-deep: #070b14;
+    --bg: #0c1220;
+    --surface: #121b2c;
+    --surface-2: #19253b;
+    --border: #2a3650;
+    --border-lit: #5a4a30;
+    --text: #f1ece2;
+    --text-dim: #c9c2b4;
+    --muted: #9a9fae;
+    --faint: #6b7184;
+    --accent: #e0a85a;
+    --accent-hover: #f3c98a;
+    --accent-ink: #1a1006;
+    --kids: #ffd54f;
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.5);
+    --shadow-2: 0 8px 24px -8px rgb(0 0 0 / 0.7);
+    --shadow-3: 0 18px 48px -16px rgb(0 0 0 / 0.8);
+    --rim: inset 0 1px 0 rgb(255 255 255 / 0.05);
+    --rim-lit: inset 0 1px 0 rgb(255 255 255 / 0.12);
+    --font: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
   }
-  * { box-sizing:border-box; }
-  body { margin:0; min-height:100vh; font-family:var(--font); color:var(--text); line-height:1.55;
+
+  * { box-sizing: border-box; }
+  html { background: var(--bg-deep); }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: var(--font);
+    color: var(--text);
+    line-height: 1.55;
     background:
-      radial-gradient(900px 500px at 0% -10%, rgba(80,140,190,.18), transparent 55%),
-      radial-gradient(700px 400px at 100% 0%, rgba(40,80,120,.22), transparent 50%),
-      linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%); }
-  .wrap { max-width:880px; margin:0 auto; padding:3rem 1.25rem 4rem; }
-  .hero { text-align:center; margin-bottom:2.5rem; }
-  .hero h1 { font-size:2.3rem; margin:0 0 .6rem; color:var(--accent); }
-  .hero p { color:var(--muted); font-size:1.05rem; max-width:44rem; margin:0 auto; }
-  .tags { display:flex; gap:.5rem; justify-content:center; margin-top:1rem; flex-wrap:wrap; }
-  .pill { border-radius:999px; padding:.3rem .8rem; font-size:.8rem; font-weight:600; border:1px solid var(--border); }
-  .pill.type { color:#fff; border-color:var(--c); background:var(--c); }
-  .pill.kids { color:var(--kids); border-color:var(--kids); }
-  .pill.range { color:var(--accent); border-color:var(--accent); }
+      radial-gradient(1000px 600px at 0% -10%, rgb(224 168 90 / 0.14), transparent 58%),
+      radial-gradient(820px 480px at 100% -4%, rgb(120 90 200 / 0.12), transparent 52%),
+      linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+  }
 
-  .cards { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:2.5rem; }
-  @media (max-width:700px){ .cards { grid-template-columns:1fr; } }
-  .card { background:linear-gradient(145deg, var(--surface) 0%, #0e1a2c 100%);
-    border:1px solid var(--border); border-radius:14px; padding:1.6rem 1.5rem;
-    box-shadow:0 10px 30px rgba(0,0,0,.35); display:flex; flex-direction:column; }
-  .card h2 { margin:0 0 .35rem; font-size:1.25rem; display:flex; align-items:center; gap:.5rem; }
-  .card p.sub { color:var(--muted); font-size:.88rem; margin:0 0 1.1rem; flex:1; }
-  .btn { display:inline-flex; align-items:center; justify-content:center; width:100%;
-    padding:.8rem 1rem; border-radius:9px; background:var(--accent); color:#061018;
-    font-weight:700; font-size:1rem; text-decoration:none; border:1px solid transparent; }
-  .btn:hover { background:var(--accent-hover); }
-  .btn.ghost { background:transparent; color:var(--accent); border-color:var(--border); }
-  .btn.ghost:hover { background:var(--surface-2); color:var(--accent-hover); }
-  .note { color:var(--muted); font-size:.8rem; margin-top:.8rem; }
+  :focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 3px; border-radius: 6px; }
 
-  .section { background:var(--surface); border:1px solid var(--border); border-radius:14px;
-    padding:1.5rem 1.6rem; margin-bottom:1.25rem; }
-  .section h2 { margin-top:0; font-size:1.15rem; color:var(--accent); }
-  .section ol, .section ul { margin:.4rem 0 0; padding-left:1.2rem; color:var(--muted); font-size:.92rem; }
-  .section li { margin-bottom:.4rem; }
-  .section li strong { color:var(--text); }
-  code { background:var(--surface-2); border:1px solid var(--border); border-radius:4px;
-    padding:.08rem .4rem; font-size:.85rem; color:var(--text); }
-  pre { background:var(--bg-deep); border:1px solid var(--border); border-radius:8px;
-    padding:.9rem 1rem; overflow-x:auto; font-size:.84rem; color:var(--text); margin:.6rem 0 0; }
-  pre code { background:none; border:none; padding:0; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
 
-  footer { text-align:center; margin-top:2.5rem; color:var(--muted); font-size:.85rem; }
-  footer a { color:var(--accent); text-decoration:none; }
-  footer a:hover { text-decoration:underline; }
-  .credit { font-weight:600; color:var(--text); }
+  .hero { text-align: center; margin-bottom: 2.5rem; }
+  .hero .mark {
+    display: block;
+    width: min(28rem, 100%);
+    height: auto;
+    margin: 0 auto 1.4rem;
+    /* The logo is round with a transparent background, so it gets a glow instead of a frame. */
+    filter: drop-shadow(0 18px 40px rgb(0 0 0 / 0.75)) drop-shadow(0 0 28px rgb(224 168 90 / 0.18));
+  }
+  .hero h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .hero p { color: var(--text-dim); font-size: 1.05rem; max-width: 44rem; margin: 0 auto; text-wrap: pretty; }
+  .hero .tagline { font-size: 0.85rem; margin-top: 0.8rem; color: var(--faint); }
+
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.6rem 1.7rem;
+    margin-bottom: 1.25rem;
+    box-shadow: var(--shadow-2), var(--rim);
+  }
+  .section > h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--accent-hover);
+    display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap;
+  }
+  .section p.lead { color: var(--muted); font-size: 0.93rem; margin: 0 0 1.15rem; max-width: 62ch; }
+  .section p.lead strong { color: var(--text); }
+
+  .section.featured {
+    border-color: var(--border-lit);
+    background: linear-gradient(145deg, var(--surface-2) 0%, var(--bg) 100%);
+    box-shadow: var(--shadow-3), var(--rim-lit);
+  }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+           gap: 1.25rem; margin-bottom: 1.25rem; }
+  @media (max-width: 700px) { .cards { grid-template-columns: 1fr; } }
+
+  .card {
+    display: flex; flex-direction: column; min-width: 0;
+    background: linear-gradient(145deg, var(--surface) 0%, var(--bg) 100%);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.6rem 1.5rem;
+    box-shadow: var(--shadow-2), var(--rim);
+  }
+  .card > h2 {
+    margin: 0 0 0.35rem; font-size: 1.2rem; font-weight: 600; color: var(--text);
+    display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap;
+  }
+  .card p.sub { color: var(--muted); font-size: 0.88rem; margin: 0 0 1.1rem; }
+  .card .btn { margin-top: auto; }
+
+  .version-badge {
+    font-size: 0.72rem; font-weight: 600; color: var(--accent-hover);
+    background: rgb(224 168 90 / 0.12); border: 1px solid rgb(224 168 90 / 0.45);
+    border-radius: 999px; padding: 0.1rem 0.6rem; letter-spacing: 0.03em; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 100%; padding: 0.75rem 1rem; border-radius: 8px;
+    background: linear-gradient(180deg, var(--accent) 0%, #c48a3e 100%);
+    color: var(--accent-ink); font-weight: 700; font-size: 1rem; text-decoration: none;
+    border: 1px solid transparent;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), inset 0 -1px 0 rgb(0 0 0 / 0.4), var(--shadow-1);
+    transition: background 90ms, box-shadow 90ms, transform 90ms;
+  }
+  .btn:hover { background: linear-gradient(180deg, var(--accent-hover) 0%, var(--accent) 100%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), inset 0 -1px 0 rgb(0 0 0 / 0.4), var(--shadow-2); }
+  .btn:active { transform: translateY(1px); }
+  .btn.wide { width: auto; padding-left: 2.2rem; padding-right: 2.2rem; }
+
+  .steps { margin: 0 0 1rem; padding-left: 1.2rem; font-size: 0.88rem; color: var(--muted); }
+  .steps li { margin-bottom: 0.35rem; }
+  code {
+    background: var(--bg-deep); border: 1px solid var(--border); border-radius: 6px;
+    padding: 0.08rem 0.4rem; font-size: 0.82rem; color: var(--text-dim);
+  }
+  pre {
+    background: var(--bg-deep); border: 1px solid var(--border); border-radius: 8px;
+    padding: 0.8rem 1rem; overflow-x: auto; font-size: 0.82rem; color: var(--text-dim); margin: 0 0 1rem;
+  }
+  pre code { background: none; border: none; padding: 0; }
+  .note {
+    margin: 0 0 1.1rem; padding: 0.6rem 0.8rem; font-size: 0.82rem; color: var(--muted);
+    background: var(--bg-deep); border: 1px solid var(--border);
+    border-left: 3px solid rgb(224 168 90 / 0.6); border-radius: 6px;
+  }
+
+  .tags { display: flex; gap: 0.45rem; flex-wrap: wrap; margin: 0 0 1.1rem; }
+  .pill { border-radius: 999px; padding: 0.22rem 0.75rem; font-size: 0.78rem; font-weight: 600; border: 1px solid var(--border); }
+  .pill.type { color: #fff; border-color: var(--c); background: var(--c); }
+  .pill.kids { color: var(--kids); border-color: var(--kids); }
+
+  .features { margin: 0.4rem 0 0; padding-left: 1.2rem; color: var(--muted); font-size: 0.93rem; }
+  .features li { margin-bottom: 0.45rem; }
+  .features li strong { color: var(--text); font-weight: 600; }
+
+  footer { text-align: center; margin-top: 2.75rem; color: var(--faint); font-size: 0.85rem; }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { color: var(--accent-hover); text-decoration: underline; }
+  footer .links { margin-bottom: 0.6rem; }
+  footer .links span { margin: 0 0.5rem; color: var(--border); }
+  footer .credit { margin-top: 0.6rem; color: var(--text-dim); font-weight: 600; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    .btn:active { transform: none; }
+  }
 </style>
 </head>
 <body>
   <div class="wrap">
     <section class="hero">
-      <h1>📍 Local Events Finder</h1>
-      <p>Find things to do near you. It scrapes local events, works out how far
-      each one is, and tags each by type (music, park, theatre, …) — so you can
-      filter down to exactly what you're after.</p>
+      <img class="mark" src="logo.png" width="880" height="880" alt="Local Events Finder" />
+      <h1>Local Events Finder</h1>
+      <p>
+        Find things to do near you. Pick a place or use your location, choose how far you're
+        willing to go, and browse what's on: scheduled events and places you can visit any day,
+        each tagged by type and, when it's meant for children, as kid friendly.
+      </p>
+      <p class="tagline">No account, no API keys. Your searches and tags stay on your device.</p>
+    </section>
+
+    <div class="section featured">
+      <h2>
+        ▶ Use it in your browser, no install
+        <span class="version-badge" data-app-version>v—</span>
+      </h2>
+      <p class="lead">
+        Type a town or use your location, then browse and filter right here. Browsers can't read
+        some event sites directly, so this version <strong>may find fewer scheduled events</strong>
+        than the Android app or the version you run on your computer.
+      </p>
+      <a class="btn wide" href="app.html">Open the web app</a>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <h2>🤖 Android <span class="version-badge" data-app-version>v—</span></h2>
+        <p class="sub">A native app with device GPS and the same search, tags and filters. Android 8.0 or newer.</p>
+        <ol class="steps" style="margin-top:0">
+          <li>Download the APK on your phone.</li>
+          <li>Allow your browser or file manager to install unknown apps when asked.</li>
+          <li>Open the file and install. The app is signed by Deltrex.</li>
+        </ol>
+        <p class="note">
+          Installed a version from before 1.2.0? Uninstall it first, because the app's signing
+          key changed.
+        </p>
+        <a class="btn" style="margin-top:1.2rem"
+           href="https://github.com/TheRealDeltrex/Local-Event-Finder/releases/latest/download/LocalEventFinder.apk">
+          Download the APK
+        </a>
+      </div>
+
+      <div class="card">
+        <h2>💻 On your computer <span class="version-badge" data-app-version>v—</span></h2>
+        <p class="sub">The most complete results, because it reads event sites directly. Needs Python 3.10 or newer.</p>
+<pre><code>git clone https://github.com/TheRealDeltrex/Local-Event-Finder
+cd Local-Event-Finder
+pip install -r requirements.txt
+python app.py</code></pre>
+        <p class="note">It opens in your browser at <code>http://127.0.0.1:5001</code>.</p>
+        <a class="btn" style="margin-top:1.2rem"
+           href="https://github.com/TheRealDeltrex/Local-Event-Finder#run-the-local-web-app">
+          Setup instructions
+        </a>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>What it does</h2>
       <div class="tags">
         <span class="pill type" style="--c:#8e24aa">Music</span>
         <span class="pill type" style="--c:#2e7d32">Park &amp; nature</span>
         <span class="pill type" style="--c:#c62828">Theatre &amp; shows</span>
         <span class="pill kids">Kid friendly</span>
-        <span class="pill range">Within 40 km</span>
       </div>
-    </section>
-
-    <div class="cards">
-      <div class="card">
-        <h2>🌐 Web version</h2>
-        <p class="sub">Run it right here in your browser — no install. Type a place or use your location, then browse and filter events.</p>
-        <a class="btn" href="app.html">Launch the web app</a>
-        <p class="note">Fully interactive; falls back to sample events when live scraping isn't reachable from a browser. For real listings, run it locally (below).</p>
-      </div>
-
-      <div class="card">
-        <h2>🤖 Android app</h2>
-        <p class="sub">A native app with device GPS, offline tag storage, and the same type and kid-friendly tagging. Signed by Deltrex.</p>
-        <a class="btn" href="https://github.com/TheRealDeltrex/Local-Event-Finder/releases/latest/download/LocalEventFinder.apk">Download the APK</a>
-        <p class="note">Version <span data-app-version>—</span> · Android 8.0+. Enable “install from unknown sources”, then open the file. Installed a version from before 1.2.0? Uninstall it first, because the app’s signing key changed.</p>
-      </div>
-    </div>
-
-    <div class="section">
-      <h2>Run the web version locally (recommended)</h2>
-      <p style="color:var(--muted);font-size:.92rem;margin:0 0 .3rem">
-        The in-browser demo is handy, but the local Flask app is faster and more reliable
-        (it scrapes server-side, so there's no CORS proxy in the way).</p>
-      <pre><code>git clone https://github.com/TheRealDeltrex/Local-Event-Finder
-cd Local-Event-Finder
-pip install -r requirements.txt
-python app.py            # opens http://127.0.0.1:5001</code></pre>
-    </div>
-
-    <div class="section">
-      <h2>What it does</h2>
-      <ul>
-        <li><strong>Events</strong> — reads the structured event data that event sites publish, for your town and the towns around it.</li>
-        <li><strong>Places</strong> — adds things you can do any day, like museums, parks and pools, from OpenStreetMap.</li>
-        <li><strong>Your location</strong> — device GPS or a typed town/city, resolved via OpenStreetMap.</li>
-        <li><strong>Within range</strong> — everything is distance-filtered, with distance and direction shown.</li>
-        <li><strong>Tags</strong> — every result gets a coloured type (music, park, theatre, … or unknown) you can filter by, plus a <em>kid friendly</em> tag for things actually aimed at children, with manual overrides that stick.</li>
-        <li><strong>Filter</strong> — narrow results live by tag and range.</li>
+      <ul class="features">
+        <li><strong>Events</strong> from the structured event data that event sites publish, for your town and the towns around it.</li>
+        <li><strong>Places</strong> you can visit any day, like museums, parks, pools and viewpoints, from OpenStreetMap, with opening hours where known.</li>
+        <li><strong>Within range</strong>: everything is measured from you, with distance and compass direction, and dropped if it's too far.</li>
+        <li><strong>Tagged by type</strong>: every result gets a colour-coded type (music, park, theatre, … or unknown) you can filter by.</li>
+        <li><strong>Kid friendly</strong> only for things actually aimed at children, and you can switch it on or off by hand. Your choice is kept for next time.</li>
+        <li><strong>Filter</strong> by type, distance and date, or show only events or only permanent places.</li>
       </ul>
     </div>
 
     <footer>
-      <p class="credit">Created by Deltrex</p>
-      <p>Version <span data-app-version>—</span> · <a href="https://github.com/TheRealDeltrex/Local-Event-Finder">Source on GitHub</a> · <a href="https://github.com/TheRealDeltrex/Local-Event-Finder/blob/main/CHANGELOG.md">Changelog</a> · GPL-3.0</p>
+      <div class="links">
+        <a href="https://github.com/TheRealDeltrex/Local-Event-Finder/releases">All releases</a>
+        <span>·</span>
+        <a href="https://github.com/TheRealDeltrex/Local-Event-Finder/blob/main/CHANGELOG.md">Changelog</a>
+        <span>·</span>
+        <a href="https://github.com/TheRealDeltrex/Local-Event-Finder">Source on GitHub</a>
+      </div>
+      Version <span data-app-version-plain>—</span> · GPL-3.0
+      <div class="credit">Created by Deltrex</div>
     </footer>
   </div>
   <script src="version.js"></script>
-  <script>document.querySelectorAll("[data-app-version]").forEach((n) => (n.textContent = window.LEF_VERSION || "—"));</script>
+  <script>
+    var v = window.LEF_VERSION;
+    document.querySelectorAll("[data-app-version]").forEach(function (n) { n.textContent = v ? "v" + v : "v—"; });
+    document.querySelectorAll("[data-app-version-plain]").forEach(function (n) { n.textContent = v || "—"; });
+  </script>
 </body>
 </html>

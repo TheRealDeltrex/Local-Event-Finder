@@ -1,24 +1,44 @@
-# 📍 Local Events Finder
+# Local Events Finder
 
-### 🌐 [**Open the web app & download the Android app →**](https://therealdeltrex.github.io/Local-Event-Finder/)
+Find things to do near you. Pick a place (or use your location), choose how far you're willing
+to go, and browse what's on: scheduled events and places you can visit any day. Every result is
+tagged with a colour-coded **type** (music, park, theatre, …) and, when it's meant for children,
+as **kid friendly**.
 
-Find things to do near you. Pick a place (or use your location), choose how far
-you're willing to go, and browse what's on: scheduled events and places you can
-visit any day. Every result is tagged with a colour-coded **type** (music,
-park, theatre, …) and, when it's meant for children, as **kid friendly**. You
-can filter by type, distance and date.
+[![Local Events Finder](docs/logo.png)](https://therealdeltrex.github.io/Local-Event-Finder/)
 
-## Ways to use it
+**Just want to use it? Go to the [website](https://therealdeltrex.github.io/Local-Event-Finder/)**
+to use it in your browser or download the Android app, no code needed. You can also take the APK
+from the [latest release](../../releases/latest) directly.
+
+All three versions share one version number, shown on the website and in each app's footer.
+Licensed GPL-3.0; what changed in each release is in the [changelog](CHANGELOG.md).
+
+## What it does
+
+- **Find events** from the structured event data that event sites publish, for your town and
+  the towns around it.
+- **Find places** you can visit any day, like museums, parks, pools and viewpoints, from
+  OpenStreetMap, with opening hours where known.
+- **Stay in range**: everything is measured from you, with distance and compass direction, and
+  dropped if it's too far.
+- **Tag by type**: every result gets a colour-coded type (or "unknown") you can filter by.
+- **Mark kid friendly** only what is aimed at children, with a manual on/off switch that is
+  remembered for next time.
+- **Filter** by type, distance and date, or show only events or only permanent places.
+
+No accounts and no API keys. Your searches and tags stay on your device.
+
+## Getting it
 
 | Version | Best for | How to get it |
 | --- | --- | --- |
-| **Android app** | Everyday use on your phone | Download the APK from the [website](https://therealdeltrex.github.io/Local-Event-Finder/) |
+| **Android app** | Everyday use on your phone | Download the APK from the [website](https://therealdeltrex.github.io/Local-Event-Finder/) or the [latest release](../../releases/latest) |
 | **Local web app** | The most complete results on a computer | Run it yourself (see below) |
 | **Browser version** | A quick try with nothing to install | Open the [website](https://therealdeltrex.github.io/Local-Event-Finder/) |
 
-All three do the same search and share the same version number. The browser
-version has one built-in limitation: browsers can't read some event sites
-directly, so it may find fewer scheduled events than the other two.
+All three do the same search. The browser version has one built-in limitation: browsers can't
+read some event sites directly, so it may find fewer scheduled events than the other two.
 
 ## How it works
 
@@ -36,8 +56,6 @@ directly, so it may find fewer scheduled events than the other two.
    ("unknown" when it can't tell), and a kid-friendly tag only when it is aimed
    at children. You can switch the kid-friendly tag on or off by hand, and
    your choice is kept the next time you search.
-
-No accounts and no API keys. Your searches and tags stay on your device.
 
 ## Run the local web app
 
@@ -68,14 +86,13 @@ To build the Android app yourself, see [android/README.md](android/README.md).
 | --- | --- |
 | `eventfinder/`, `app.py`, `templates/`, `static/` | Local web app (Python + Flask) |
 | `android/` | Android app (Kotlin + Jetpack Compose) |
-| `docs/` | Website, browser version and the APK download (served by GitHub Pages) |
+| `docs/` | Website, browser version and the logo (served by GitHub Pages) |
 | `scripts/` | Version and consistency tools |
 
 ## Versions and releases
 
 There is one version number for the whole project, in the [`VERSION`](VERSION)
-file, and every version shows it in its footer. What changed in each release is
-in the [changelog](CHANGELOG.md).
+file, and every version shows it in its footer.
 
 To make a release:
 
