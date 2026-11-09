@@ -112,6 +112,7 @@
   }
   .card p.sub { color: var(--muted); font-size: 0.88rem; margin: 0 0 1.1rem; }
   .card .btn { margin-top: auto; }
+  .card .note { margin-bottom: 1.2rem; }
 
   .version-badge {
     font-size: 0.72rem; font-weight: 600; color: var(--accent-hover);
@@ -185,20 +186,17 @@
       <p class="tagline">No account, no API keys. Your searches and tags stay on your device.</p>
     </section>
 
-    <div class="section featured">
-      <h2>
-        ▶ Use it in your browser, no install
-        <span class="version-badge" data-app-version>v—</span>
-      </h2>
-      <p class="lead">
-        Type a town or use your location, then browse and filter right here. Browsers can't read
-        some event sites directly, so this version <strong>may find fewer scheduled events</strong>
-        than the Android app or the version you run on your computer.
-      </p>
-      <a class="btn wide" href="app.html">Open the web app</a>
-    </div>
-
     <div class="cards">
+      <div class="card">
+        <h2>🌐 Web version <span class="version-badge" data-app-version>v—</span></h2>
+        <p class="sub">Use it right here in your browser, no install. Type a town or use your location, then browse and filter.</p>
+        <p class="note">
+          Browsers can't read some event sites directly, so this version may find fewer
+          scheduled events than the Android app or the version you run on your computer.
+        </p>
+        <a class="btn" href="app.html">Open the web app</a>
+      </div>
+
       <div class="card">
         <h2>🤖 Android <span class="version-badge" data-app-version>v—</span></h2>
         <p class="sub">A native app with device GPS and the same search, tags and filters. Android 8.0 or newer.</p>
@@ -211,25 +209,25 @@
           Installed a version from before 1.2.0? Uninstall it first, because the app's signing
           key changed.
         </p>
-        <a class="btn" style="margin-top:1.2rem"
+        <a class="btn"
            href="https://github.com/TheRealDeltrex/Local-Event-Finder/releases/latest/download/LocalEventFinder.apk">
           Download the APK
         </a>
       </div>
+    </div>
 
-      <div class="card">
-        <h2>💻 On your computer <span class="version-badge" data-app-version>v—</span></h2>
-        <p class="sub">The most complete results, because it reads event sites directly. Needs Python 3.10 or newer.</p>
+    <div class="section">
+      <h2>💻 Run it on your computer <span class="version-badge" data-app-version>v—</span></h2>
+      <p class="lead">
+        The <strong>most complete results</strong>, because it reads event sites directly
+        instead of going through the browser. Needs Python 3.10 or newer, and opens in your
+        browser at <code>http://127.0.0.1:5001</code>.
+      </p>
 <pre><code>git clone https://github.com/TheRealDeltrex/Local-Event-Finder
 cd Local-Event-Finder
 pip install -r requirements.txt
 python app.py</code></pre>
-        <p class="note">It opens in your browser at <code>http://127.0.0.1:5001</code>.</p>
-        <a class="btn" style="margin-top:1.2rem"
-           href="https://github.com/TheRealDeltrex/Local-Event-Finder#run-the-local-web-app">
-          Setup instructions
-        </a>
-      </div>
+      <a class="btn wide" href="https://github.com/TheRealDeltrex/Local-Event-Finder#run-the-local-web-app">Setup instructions</a>
     </div>
 
     <div class="section">
