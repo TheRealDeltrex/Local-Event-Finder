@@ -63,8 +63,7 @@ keyPassword=…
 ```
 
 Then run `./gradlew :app:assembleRelease`. The APK is written to
-`app/build/outputs/apk/release/LocalEventFinder-<version>-release.apk`; copy it
-to `docs/LocalEventFinder.apk` to publish it on the website. Always sign with
+`app/build/outputs/apk/release/LocalEventFinder-<version>-release.apk`. Always sign with
 the same key, or phones with the app installed can't update it.
 
 ## Project layout
